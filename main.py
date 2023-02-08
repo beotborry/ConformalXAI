@@ -19,6 +19,8 @@ if __name__ == '__main__':
     torch.cuda.set_device(device)
 
     model = resnet50(weights = ResNet50_Weights.DEFAULT).eval().cuda()
+    # model = resnet18(weights = ResNet18_Weights.DEFAULT).eval().cuda()
+    # model = resnet34(weights = ResNet34_Weights.DEFAULT).eval().cuda()
 
     if args.img_path is None:
         with open(f"{args.split}_seed_{args.seed}.npy", "rb") as f:
@@ -39,7 +41,7 @@ if __name__ == '__main__':
             conformalizer.evaluate()
         elif args.run_option == 'eval':
             conformalizer.evaluate()
-        elif args.run_option == "pred":
+        elif args.run_option == "pred" or args.run_option == "get_transform":
             conformalizer.make_confidence_set()
         # conformalizer.logging()
 

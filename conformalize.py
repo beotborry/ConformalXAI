@@ -1,7 +1,7 @@
 import torch
 import numpy as np
 import matplotlib.pyplot as plt
-from transform_factory import resize_322, center_crop_224, tensorize, get_spatial_transform, get_color_transform, imagenet_normalize
+from transform_factory import resize_322, center_crop_224, tensorize, get_spatial_transform, get_color_transform, imagenet_normalize, PIL2Tensor, ToPIL, gauss_noise_tensor
 from logger import Logger
 from tqdm import tqdm
 import time
@@ -56,7 +56,8 @@ class ConformalExpl:
             noise = self.noise_sigma * torch.randn_like(tensorized_img)
 
             if self.transform == "both":
-                transformed_img = imagenet_normalize(tensorize(T_spatial(T_color(resize_322(self.orig_img)))) - noise)
+                tmp = ToPIL(gauss_noise_tensor(PIL2Tensor(resize_322(self.orig_img))))
+                transformed_img = imagenet_normalize(tensorize(T_spatial(T_color(tmp))))
             elif self.transform == "spatial":
                 transformed_img = T_spatial(imagenet_normalize(tensorized_img - noise))
 
@@ -79,24 +80,25 @@ class ConformalExpl:
                 true_expl = _true_expl # FIXME
 
             
-            if self.pred_method == "new":
-                if self.transform == "both":
-                    pred_expl = center_crop_224(self.expl_func(imagenet_normalize(tensorize(T_color(resize_322(self.orig_img)))).unsqueeze(0).cuda()))
-                elif self.transform == "spatial":
-                    pred_expl = center_crop_224(self.expl_func(imagenet_normalize(tensorized_img).unsqueeze(0).cuda()))
-            elif self.pred_method == "orig":
-                if self.upsample:
-                    pred_expl = self.orig_expl # (1, 1, 224, 224)
-                else:
-                    pred_expl = self.orig_expl #FIXME # (1, 1, 11, 11)
+            # if self.pred_method == "new":
+            #     if self.transform == "both":
+            #         pred_expl = center_crop_224(self.expl_func(imagenet_normalize(tensorize(T_color(resize_322(self.orig_img)))).unsqueeze(0).cuda()))
+            #     elif self.transform == "spatial":
+            #         pred_expl = center_crop_224(self.expl_func(imagenet_normalize(tensorized_img).unsqueeze(0).cuda()))
+            # elif self.pred_method == "orig":
+            #     if self.upsample:
+            #         pred_expl = self.orig_expl # (1, 1, 224, 224)
+            #     else:
+            #         pred_expl = self.orig_expl #FIXME # (1, 1, 11, 11)
 
 
             if self.reduction == 'sum':
                 true_expl = torch.sum(true_expl, axis = 1).unsqueeze(1)
-                pred_expl = torch.sum(pred_expl, axis = 1).unsqueeze(1)
+                # pred_expl = torch.sum(pred_expl, axis = 1).unsqueeze(1)
             
             # print(true_expl.shape, pred_expl.shape)
-            assert true_expl.shape == pred_expl.shape
+            # assert true_expl.shape == pred_expl.shape
+            assert true_expl.shape == self.orig_expl.shape
 
             # scores.append(torch.abs(true_expl - pred_expl).detach().squeeze(0).cpu().numpy())
             true_expls.append(true_expl.detach().squeeze(0).cpu().numpy())

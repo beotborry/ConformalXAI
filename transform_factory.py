@@ -56,13 +56,41 @@ def tensorize(img:Image.Image):
     
     return tensorize(img)
 
+def PIL2Tensor(img:Image.Image):
+    t = transforms.Compose([
+        transforms.PILToTensor(),
+    ])
+
+    return t(img)
+
+def gauss_noise_tensor(img):
+    assert isinstance(img, torch.Tensor)
+    dtype = img.dtype
+    if not img.is_floating_point():
+        img = img.to(torch.float32)
+    
+    sigma = 0.5
+    
+    out = img + sigma * torch.randn_like(img)
+    
+    if out.dtype != dtype:
+        out = out.to(dtype)
+        
+    return out
+
+def ToPIL(img):
+    t = transforms.Compose([
+        transforms.ToPILImage(),
+    ])
+    
+    return t(img)
 
 
 def get_spatial_transform():
     transform_config = {
         'flip_horizon' : int(torch.rand(1) > 0.5),
         'flip_vertical' :  int(torch.rand(1) > 0.5),
-        'rot_angle' : (180 * torch.rand(1)).item(),
+        'rot_angle' : (-90 * torch.rand(1) + 45).item(),
         # 'scale' : (0.8 - 1.2) * torch.rand(1) + 1.2,
     }
 
@@ -84,10 +112,10 @@ def get_spatial_transform():
 def get_color_transform():
     transform = transforms.Compose([
         transforms.ColorJitter(
-            brightness = 0.5, 
-            hue = 0.5,
-            # contrast = (0, 3),
-            # saturation = (0, 3)
+            brightness = 0.15, 
+            hue = 0.15,
+            contrast = 0.25,
+            saturation = 0.25
         ),
     ])
 

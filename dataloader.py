@@ -20,11 +20,17 @@ from os.path import isfile, join
 import random
 from utils import set_seed
 import numpy as np
+from argparse import ArgumentParser
 
 from torch.nn.functional import softmax
 if __name__ == "__main__":
+    parser = ArgumentParser()
+    parser.add_argument("--seed", type=int)
+
+    args = parser.parse_args()
+
+    seed = args.seed   
     base_img_path = "/home/juhyeon/Imagenet/train"
-    seed = 2
     set_seed(seed)
 
 
@@ -32,16 +38,27 @@ if __name__ == "__main__":
     torch.cuda.set_device(device)
 
     model = resnet50(weights = ResNet50_Weights.DEFAULT).eval().cuda()
+    # model = resnet18(weights = ResNet18_Weights.DEFAULT).eval().cuda()
+    # model = resnet34(weights = ResNet34_Weights.DEFAULT).eval().cuda()
 
 
     class_list = listdir(base_img_path)
     class_list = sorted(class_list)
+    class_list = np.array(class_list)
+
+    class_idx = np.arange(0, 1000, 1)
+    np.random.shuffle(class_idx)
+    class_idx = class_idx[:100]
+
     # print(class_list, len(class_list))
     img_path_list = []
 
-    for label, c in tqdm(enumerate(class_list)):
+    prob_list = []
+    for label, c in tqdm(zip(class_idx, class_list[class_idx])):
+        n_selected = 0
         filelist = listdir(join(base_img_path, c))
-        filelist = random.choices(filelist, k = 1000)
+
+        np.random.shuffle(filelist)
         for f in filelist:
             img_path = join(base_img_path, c, f)
             img = Image.open(img_path)
@@ -53,11 +70,15 @@ if __name__ == "__main__":
 
             pred = model(img.unsqueeze(0))
 
-            if pred.argmax() == label and softmax(pred).squeeze().max() >= 0.05:
+
+            if pred.argmax() == label and softmax(pred).squeeze().max() >= 0.08:
                 img_path_list.append(img_path)
-                break
+                n_selected += 1
+                if n_selected == 10:
+                    break
             else:
                 continue
+        print(len(img_path_list))
 
 
     with open(f"./train_seed_{seed}.npy", "wb") as f:
