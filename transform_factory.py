@@ -1,9 +1,16 @@
 import torch
 import torch.nn.functional as F
 import numpy as np
+from torch import Tensor
 from math import sqrt, ceil
 from torchvision import transforms
 from PIL import Image
+import random
+
+
+def add_noise(img: Image.Image, mean, sd):
+    return min(max(0, img + random.normalvariate(mean, sd)), 255)
+
 
 def resize_322(img: Image.Image):
     resize = transforms.Compose([
@@ -15,6 +22,12 @@ def resize_322(img: Image.Image):
 def center_crop_224(img:Image.Image):
     center_crop = transforms.Compose([
         transforms.CenterCrop((224, 224))
+    ])
+    return center_crop(img)
+
+def center_crop_11(img:Image.Image):
+    center_crop = transforms.Compose([
+        transforms.CenterCrop((11, 11))
     ])
     return center_crop(img)
 
@@ -66,15 +79,15 @@ def get_spatial_transform():
         
     ])
 
-    return transform, inv_transform
+    return transform, inv_transform, transform_config
 
 def get_color_transform():
     transform = transforms.Compose([
         transforms.ColorJitter(
             brightness = 0.5, 
             hue = 0.5,
-            contrast = (0, 3),
-            saturation = (0, 3)
+            # contrast = (0, 3),
+            # saturation = (0, 3)
         ),
     ])
 

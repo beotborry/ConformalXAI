@@ -1,5 +1,6 @@
 import functools
-from captum.attr import LayerGradCam, LayerAttribution, IntegratedGradients, InputXGradient, GuidedBackprop, LRP
+from captum.attr import LayerGradCam, LayerAttribution, IntegratedGradients, InputXGradient, GuidedBackprop, LRP, Occlusion, Saliency, DeepLift, LayerIntegratedGradients, LayerGradientXActivation, LayerConductance, LayerDeepLift, LayerActivation
+from captum.attr import LayerLRP
 from captum.attr import visualization as viz
 
 
@@ -8,14 +9,14 @@ class ExplFactory:
         pass
 
     @staticmethod
-    def get_explainer(model, expl_method, layer = None):
+    def get_explainer(model, expl_method, layer = None, upsample=False):
         if layer is None:
             layer = model.layer4 # last conv layer
 
         assert expl_method is not None
         
         if expl_method == "GradCAM":
-            return functools.partial(get_grad_cam, model, layer)
+            return functools.partial(get_grad_cam, model, layer, upsample)
         elif expl_method == "IG":
             return functools.partial(get_ig, model)
         elif expl_method == "InputXGrad":
@@ -24,34 +25,154 @@ class ExplFactory:
             return functools.partial(get_gbp, model)
         elif expl_method == "LRP":
             return functools.partial(get_lrp, model)
+        elif expl_method == "Occlusion":
+            return functools.partial(get_occlusion, model)
+        elif expl_method == "Saliency":
+            return functools.partial(get_saliency, model)
+        elif expl_method == "LayerLRP":
+            return functools.partial(get_layer_lrp, model, layer)
+        elif expl_method == "DeepLift":
+            return functools.partial(get_deeplift, model)
+        elif expl_method == "LayerIG":
+            return functools.partial(get_layerIG, model, layer, upsample)
+        elif expl_method == "LayerXAct":
+            return functools.partial(get_layerXAct, model, layer, upsample)
+        elif expl_method == "LayerConductance":
+            return functools.partial(get_layerConductance, model, layer)
+        elif expl_method == "LayerDL":
+            return functools.partial(get_layerDL, model, layer, upsample)
+        else:
+            print("Check Expl Method Name!")
 
-def get_grad_cam(model, layer, img):
+def get_grad_cam(model, layer, upsample, img, orig_target=None):
     target = model(img).argmax()
+
+    if orig_target != "init" and target != orig_target:
+        return None, target
 
     gc = LayerGradCam(model, layer)
     attr = gc.attribute(img, target = target)
-    return LayerAttribution.interpolate(attr, img.shape[2:], 'bilinear')
+    if upsample:
+        return LayerAttribution.interpolate(attr, img.shape[2:], 'bilinear'), target
+    else: return attr, target
 
-def get_ig(model, img):
+def get_ig(model, img, orig_target=None):
     target = model(img).argmax()
+
+
+    if orig_target != "init" and target != orig_target:
+        return None, target
 
     ig = IntegratedGradients(model)
-    return ig.attribute(img, target = target)
+    return ig.attribute(img, target = target), target
 
-def get_input_x_grad(model, img):
+def get_input_x_grad(model, img, orig_target=None):
     target = model(img).argmax()
+
+    if orig_target != "init" and target != orig_target:
+        return None, target
 
     input_x_grad = InputXGradient(model)
-    return input_x_grad.attribute(img, target = target)
+    return input_x_grad.attribute(img, target = target), target
 
-def get_gbp(model, img):
+def get_gbp(model, img, orig_target=None):
     target = model(img).argmax()
+
+    if orig_target != "init" and target != orig_target:
+        return None, target
 
     gbp = GuidedBackprop(model)
-    return gbp.attribute(img, target = target)
+    return gbp.attribute(img, target = target), target
 
-def get_lrp(model, img):
+def get_lrp(model, img, orig_target=None):
     target = model(img).argmax()
 
+    if orig_target != "init" and target != orig_target:
+        return None, target
+
     lrp = LRP(model)
-    return lrp.attribute(img, target = target)
+    return lrp.attribute(img, target = target), target
+
+def get_occlusion(model, img, orig_target=None):
+    target = model(img).argmax()
+    
+    if orig_target != "init" and target != orig_target:
+        return None, target
+
+    ablator = Occlusion(model)
+    return ablator.attribute(img, target=target, sliding_window_shapes=(3,15,15), strides = (3, 8, 8)), target
+
+def get_saliency(model, img, orig_target=None):
+    target = model(img).argmax()
+    
+    if orig_target != "init" and target != orig_target:
+        return None, target
+
+    saliency = Saliency(model)
+
+    return saliency.attribute(img, target=target), target
+
+def get_layer_lrp(model, layer, img, orig_target=None):
+    target = model(img).argmax()
+    
+    if orig_target != "init" and target != orig_target:
+        return None, target
+
+    lrp = LayerLRP(model, layer)
+    attr = lrp.attribute(img, target = target)
+    return attr, target
+
+def get_deeplift(model, img, orig_target=None):
+    target = model(img).argmax()
+    
+    if orig_target != "init" and target != orig_target:
+        return None, target
+
+    dl = DeepLift(model)
+    return dl.attribute(img, target=target), target
+
+def get_layerIG(model, layer, upsample, img, orig_target=None):
+    target = model(img).argmax()
+
+    if orig_target != "init" and target != orig_target:
+        return None, target
+    
+    lig = LayerIntegratedGradients(model, layer)
+    attr = lig.attribute(img, target = target)
+    if upsample:
+        return LayerAttribution.interpolate(attr, img.shape[2:], 'bilinear'), target
+    else:
+        return attr, target
+
+def get_layerXAct(model, layer, upsample, img, orig_target=None):
+    target = model(img).argmax()
+
+    if orig_target != "init" and target != orig_target:
+        return None, target
+    layer_ga = LayerGradientXActivation(model, layer)
+    attr = layer_ga.attribute(img, target=target)
+    if upsample:
+        return LayerAttribution.interpolate(attr, img.shape[2:], 'bilinear'), target
+    else:
+        return attr, target
+
+
+def get_layerConductance(model, layer, img, orig_target=None):
+    target = model(img).argmax()
+
+    if orig_target != "init" and target != orig_target:
+        return None, target
+    layer_cond = LayerConductance(model, layer)
+
+    return layer_cond.attribute(img, target=target), target
+
+def get_layerDL(model, layer, upsample, img, orig_target=None):
+    target = model(img).argmax()
+    if orig_target != "init" and target != orig_target:
+        return None, target
+    dl = LayerDeepLift(model, layer)
+    attr = dl.attribute(img, target=target)
+    if upsample:
+        return LayerAttribution.interpolate(attr, img.shape[2:], 'bilinear'), target
+    else:
+        return attr, target
