@@ -1,8 +1,8 @@
 n_sample=2000
 
-for seed in 1
+for seed in 0 1 2 3 4
 do
-    for split in 'train'
+    for split in 'val'
     do
         for sigma in 0.05
         do
