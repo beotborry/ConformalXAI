@@ -29,9 +29,9 @@ def calc_score_and_test_expls(true_expls, orig_expl, configs):
             
         ])
         
-        true_expl = center_crop_224(T_inv_spatial(F.interpolate(torch.tensor(true_expl).unsqueeze(0), (322, 322), mode='bilinear'))).squeeze(0).numpy()
-        scores.append(np.abs(true_expl - orig_expl))
-    scores = np.stack(scores)
+        true_expl = center_crop_224(T_inv_spatial(F.interpolate(torch.tensor(true_expl).cuda().unsqueeze(0), (322, 322), mode='bilinear'))).squeeze(0)
+        scores.append(torch.abs(true_expl - orig_expl))
+    scores = torch.stack(scores)
 
 
     test_expls =[]
@@ -44,34 +44,34 @@ def calc_score_and_test_expls(true_expls, orig_expl, configs):
             
         ])
         
-        test_expls.append(center_crop_224(T_inv_spatial(F.interpolate(torch.tensor(true_expl).unsqueeze(0), (322, 322), mode='bilinear'))).squeeze(0).numpy())
+        test_expls.append(center_crop_224(T_inv_spatial(F.interpolate(torch.tensor(true_expl).cuda().unsqueeze(0), (322, 322), mode='bilinear'))).squeeze(0))
 
-    test_expls = np.stack(test_expls)
+    test_expls = torch.stack(test_expls)
 
     return scores, test_expls
 
 def qhat(score, alpha:float):
     n = score.shape[0]
-    q_hat = np.quantile(score, np.ceil((n+1) * (1-alpha)) / n, axis = 0)
+    q_hat = torch.quantile(score, np.ceil((n+1) * (1-alpha)) / n, axis = 0)
 
     return q_hat
 
-def get_conf_interval(expl: np.ndarray, q_hat: np.ndarray):
+def get_conf_interval(expl, q_hat):
     high = expl + q_hat
     low = expl - q_hat
     return (low, high)
 
-def calc_coverage_prob(true: np.ndarray, conf_low: np.ndarray, conf_high: np.ndarray):
-    is_cover = np.logical_and(conf_low <= true, true <= conf_high)
-    coverage_prob = np.sum(is_cover, axis = 0) / true.shape[0]
+def calc_coverage_prob(true, conf_low, conf_high):
+    is_cover = torch.logical_and(conf_low <= true, true <= conf_high)
+    coverage_prob = torch.sum(is_cover, axis = 0) / true.shape[0]
 
     return coverage_prob
 
 def zero_contain_rate(conf_high, conf_low):
-    zeros = np.zeros_like(conf_high)
-    contain_zero = np.where(np.logical_and(zeros > conf_low, zeros < conf_high))
+    zeros = torch.zeros_like(conf_high)
+    contain_zero = torch.where(torch.logical_and(zeros > conf_low, zeros < conf_high))
 
-    return len(contain_zero[0]) / np.prod(zeros.shape[1:])
+    return len(contain_zero[0]) / (zeros.shape[1] * zeros.shape[2])
     
 
 
@@ -97,7 +97,7 @@ for img_path in tqdm(filepath_list[:128]):
         continue
 
     orig_img = Image.open(img_path)
-    orig_img = tensorize(center_crop_224(resize_322(orig_img))).detach().numpy()
+    orig_img = tensorize(center_crop_224(resize_322(orig_img))).detach().cuda()
 
 
     with open(expr_path, "rb") as f:
@@ -105,7 +105,7 @@ for img_path in tqdm(filepath_list[:128]):
         true_expls = np.load(f, allow_pickle=True)
         configs = np.load(f, allow_pickle=True)
 
-    orig_expl = F.interpolate(torch.tensor(orig_expl).unsqueeze(0), (224, 224), mode='bilinear').squeeze(0).numpy()
+    orig_expl = F.interpolate(torch.tensor(orig_expl).cuda().unsqueeze(0), (224, 224), mode='bilinear').squeeze(0)
     scores, test_expls = calc_score_and_test_expls(true_expls, orig_expl, configs)
 
 
