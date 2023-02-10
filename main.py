@@ -9,6 +9,7 @@ from utils import set_seed
 from tqdm import tqdm
 from torch.nn.parallel import DistributedDataParallel as DDP
 import torch.nn as nn
+import os
 
 if __name__ == '__main__':
     args = get_args()
