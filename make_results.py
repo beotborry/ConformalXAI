@@ -126,6 +126,7 @@ for img_path in tqdm(filepath_list[:128]):
             'alpha': alpha,
             'coverage_prob': coverage_prob,
             'zero_contain_rate': zc_rate,
+            'orig_expl': orig_expl,
             'conf_high': conf_high,
             'conf_low': conf_low
         })
