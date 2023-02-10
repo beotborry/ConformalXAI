@@ -82,8 +82,7 @@ def gauss_noise_tensor(img):
     if not img.is_floating_point():
         img = img.to(torch.float32)
     
-    sigma = 0.5
-    
+    sigma = 1
     out = img + sigma * torch.randn_like(img)
     
     if out.dtype != dtype:
