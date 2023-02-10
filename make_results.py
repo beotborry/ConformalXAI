@@ -1,0 +1,136 @@
+import numpy as np
+import torch.nn.functional as F
+from transform_factory import center_crop_224
+from torchvision import transforms
+import torch
+from tqdm import tqdm
+from captum.attr import visualization as viz
+import os
+from PIL import Image
+from transform_factory import tensorize, resize_322, center_crop_224
+from utils import set_seed
+from argparse import ArgumentParser
+import pickle
+
+def calc_score_and_test_expls(true_expls, orig_expl, configs):
+    indicies = np.arange(0, 2000, 1)
+    np.random.shuffle(indicies)
+
+    cal_idx, val_idx = indicies[:1000], indicies[1000:]
+
+    scores = []
+
+    for true_expl, config in zip(true_expls[cal_idx], configs[cal_idx]):
+
+        T_inv_spatial = transforms.Compose([
+            transforms.RandomRotation((-config['rot_angle'], -config['rot_angle'])),
+            transforms.RandomVerticalFlip(config['flip_vertical']),
+            transforms.RandomHorizontalFlip(config['flip_horizon']),
+            
+        ])
+        
+        true_expl = center_crop_224(T_inv_spatial(F.interpolate(torch.tensor(true_expl).unsqueeze(0), (322, 322), mode='bilinear'))).squeeze(0).numpy()
+        scores.append(np.abs(true_expl - orig_expl))
+    scores = np.stack(scores)
+
+
+    test_expls =[]
+    for true_expl, config in zip(true_expls[val_idx], configs[val_idx]):
+
+        T_inv_spatial = transforms.Compose([
+            transforms.RandomRotation((-config['rot_angle'], -config['rot_angle'])),
+            transforms.RandomVerticalFlip(config['flip_vertical']),
+            transforms.RandomHorizontalFlip(config['flip_horizon']),
+            
+        ])
+        
+        test_expls.append(center_crop_224(T_inv_spatial(F.interpolate(torch.tensor(true_expl).unsqueeze(0), (322, 322), mode='bilinear'))).squeeze(0).numpy())
+
+    test_expls = np.stack(test_expls)
+
+    return scores, test_expls
+
+def qhat(score, alpha:float):
+    n = score.shape[0]
+    q_hat = np.quantile(score, np.ceil((n+1) * (1-alpha)) / n, axis = 0)
+
+    return q_hat
+
+def get_conf_interval(expl: np.ndarray, q_hat: np.ndarray):
+    high = expl + q_hat
+    low = expl - q_hat
+    return (low, high)
+
+def calc_coverage_prob(true: np.ndarray, conf_low: np.ndarray, conf_high: np.ndarray):
+    is_cover = np.logical_and(conf_low <= true, true <= conf_high)
+    coverage_prob = np.sum(is_cover, axis = 0) / true.shape[0]
+
+    return coverage_prob
+
+def zero_contain_rate(conf_high, conf_low):
+    zeros = np.zeros_like(conf_high)
+    contain_zero = np.where(np.logical_and(zeros > conf_low, zeros < conf_high))
+
+    return len(contain_zero[0]) / np.prod(zeros.shape[1:])
+    
+
+
+if __name__ == "__main__":
+    parser = ArgumentParser()
+    parser.add_argument("--seed", type=int)
+    parser.add_argument("--expl_method", choices=["GradCAM", "LayerIG", "LayerXAct", "LayerDL"])
+
+    args = parser.parse_args()
+    seed = args.seed
+    expl_method = args.expl_method
+with open(f"./val_seed_{seed}.npy", "rb") as f:
+    filepath_list = np.load(f)
+
+for img_path in tqdm(filepath_list[:128]):
+    img_name = os.path.basename(img_path)
+
+
+    expr_path = f"results/val_seed_{seed}_pred_orig_eval_orig_transform_both_sign_all_reduction_sum/{img_name}_expl_{expl_method}_sample_2000_sigma_0.05_seed_{seed}_orig_true_config.npy" 
+    results_path = f"results/val_seed_{seed}_pred_orig_eval_orig_transform_both_sign_all_reduction_sum/{img_name}_expl_{expl_method}_sample_2000_sigma_0.05_seed_{seed}_results.pkl"
+
+    if os.path.exists(results_path):
+        continue
+
+    orig_img = Image.open(img_path)
+    orig_img = tensorize(center_crop_224(resize_322(orig_img))).detach().numpy()
+
+
+    with open(expr_path, "rb") as f:
+        orig_expl = np.load(f, allow_pickle=True)
+        true_expls = np.load(f, allow_pickle=True)
+        configs = np.load(f, allow_pickle=True)
+
+    orig_expl = F.interpolate(torch.tensor(orig_expl).unsqueeze(0), (224, 224), mode='bilinear').squeeze(0).numpy()
+    scores, test_expls = calc_score_and_test_expls(true_expls, orig_expl, configs)
+
+
+    results = []
+
+    for alpha in np.arange(0.05, 1, 0.05):
+        q_hat = qhat(scores, alpha)
+
+        conf_low, conf_high = get_conf_interval(orig_expl, q_hat)
+        
+        coverage_prob = calc_coverage_prob(test_expls, conf_low, conf_high)
+
+        zc_rate = zero_contain_rate(conf_high, conf_low)
+
+        results.append({
+            'img': img_name,
+            'expl_method': expl_method,
+            'alpha': alpha,
+            'coverage_prob': coverage_prob,
+            'zero_contain_rate': zc_rate,
+            'conf_high': conf_high,
+            'conf_low': conf_low
+        })
+
+    with open(results_path, "wb") as f:
+        # np.save(f, np.stack(results))
+        pickle.dump(results, f)
+

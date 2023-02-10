@@ -10,7 +10,7 @@ from tqdm import tqdm
 import torch
 import numpy as np
 import matplotlib.pyplot as plt
-from transform_factory import resize_322, center_crop_224, tensorize, get_spatial_transform, get_color_transform, imagenet_normalize
+from transform_factory import resize_232, center_crop_224, tensorize, get_spatial_transform, get_color_transform, imagenet_normalize, resize_322
 from logger import Logger
 from tqdm import tqdm
 
@@ -30,7 +30,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     seed = args.seed   
-    base_img_path = "/home/juhyeon/Imagenet/train"
+    base_img_path = "/home/juhyeon/Imagenet/val"
     set_seed(seed)
 
 
@@ -47,14 +47,15 @@ if __name__ == "__main__":
     class_list = np.array(class_list)
 
     class_idx = np.arange(0, 1000, 1)
-    np.random.shuffle(class_idx)
-    class_idx = class_idx[:100]
+    # np.random.shuffle(class_idx)
+    # class_idx = class_idx[:100]
 
     # print(class_list, len(class_list))
     img_path_list = []
 
     prob_list = []
-    for label, c in tqdm(zip(class_idx, class_list[class_idx])):
+    total_data = 0
+    for label, c in tqdm(zip(class_idx, class_list)):
         n_selected = 0
         filelist = listdir(join(base_img_path, c))
 
@@ -66,20 +67,22 @@ if __name__ == "__main__":
             # print(np.array(img).shape)
             if len(np.array(img).shape) != 3 or np.array(img).shape[2] != 3:
                 continue
-            img = imagenet_normalize(tensorize(resize_322(img))).cuda()
+
+            total_data += 1
+            img = imagenet_normalize(tensorize(center_crop_224(resize_322(img)))).cuda()
+            # img = imagenet_normalize(tensorize(resize_322(img))).cuda()
 
             pred = model(img.unsqueeze(0))
 
 
-            if pred.argmax() == label and softmax(pred).squeeze().max() >= 0.08:
-                img_path_list.append(img_path)
-                n_selected += 1
-                if n_selected == 10:
-                    break
+            if pred.argmax() == label:
+                prob_list.append((img_path, softmax(pred).squeeze().max().item()))
             else:
                 continue
-        print(len(img_path_list))
+        print(len(prob_list))
 
 
-    with open(f"./train_seed_{seed}.npy", "wb") as f:
-        np.save(f, img_path_list)
+    with open(f"./val_prob_322_then_224_once.npy", "wb") as f:
+        np.save(f, np.stack(prob_list))
+
+    print(total_data)

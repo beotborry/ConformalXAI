@@ -12,14 +12,27 @@ def add_noise(img: Image.Image, mean, sd):
     return min(max(0, img + random.normalvariate(mean, sd)), 255)
 
 
+def resize_232(img: Image.Image):
+    resize = transforms.Compose([
+        transforms.Resize((232, 232))
+    ])
+
+    return resize(img)
+
 def resize_322(img: Image.Image):
     resize = transforms.Compose([
         transforms.Resize((322, 322))
     ])
 
     return resize(img)
+
+def resize_224(img):
+    resize = transforms.Compose([
+        transforms.Resize((224, 224))
+    ])
+    return resize(img)
     
-def center_crop_224(img:Image.Image):
+def center_crop_224(img):
     center_crop = transforms.Compose([
         transforms.CenterCrop((224, 224))
     ])
