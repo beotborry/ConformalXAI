@@ -7,7 +7,7 @@ from tqdm import tqdm
 from captum.attr import visualization as viz
 import os
 from PIL import Image
-from transform_factory import tensorize, resize_322, center_crop_224
+from transform_factory import tensorize, resize_322, center_crop_224, resize_224
 from utils import set_seed
 from argparse import ArgumentParser
 import pickle
@@ -24,12 +24,14 @@ def calc_score_and_test_expls(true_expls, orig_expl, configs):
     for true_expl, config in zip(true_expls[cal_idx], configs[cal_idx]):
 
         T_inv_spatial = transforms.Compose([
-            transforms.RandomRotation((-config['rot_angle'], -config['rot_angle']), InterpolationMode.BILINEAR),
+            transforms.RandomRotation((-config['rot_angle'], -config['rot_angle'])),
             transforms.RandomVerticalFlip(config['flip_vertical']),
             transforms.RandomHorizontalFlip(config['flip_horizon']),
             
         ])
         
+        # true_expl = center_crop_224(resize_322(T_inv_spatial(resize_224(torch.tensor(true_expl).cuda().unsqueeze(0))))).squeeze(0)
+
         true_expl = center_crop_224(F.interpolate(T_inv_spatial(torch.tensor(true_expl).cuda().unsqueeze(0)), (322, 322), mode='bicubic')).squeeze(0)
         # true_expl = center_crop_224(T_inv_spatial(F.interpolate(torch.tensor(true_expl).cuda().unsqueeze(0), (322, 322), mode='bicubic'))).squeeze(0)
         scores.append(torch.abs(true_expl - orig_expl))
@@ -40,12 +42,12 @@ def calc_score_and_test_expls(true_expls, orig_expl, configs):
     for true_expl, config in zip(true_expls[val_idx], configs[val_idx]):
 
         T_inv_spatial = transforms.Compose([
-            transforms.RandomRotation((-config['rot_angle'], -config['rot_angle']), InterpolationMode.BILINEAR),
+            transforms.RandomRotation((-config['rot_angle'], -config['rot_angle'])),
             transforms.RandomVerticalFlip(config['flip_vertical']),
             transforms.RandomHorizontalFlip(config['flip_horizon']),
             
         ])
-        
+        # test_expls.append(center_crop_224(resize_322(T_inv_spatial(resize_224(torch.tensor(true_expl).cuda().unsqueeze(0))))).squeeze(0))
         test_expls.append(center_crop_224(F.interpolate(T_inv_spatial(torch.tensor(true_expl).cuda().unsqueeze(0)), (322, 322), mode='bicubic')).squeeze(0))
         # test_expls.append(center_crop_224(T_inv_spatial(F.interpolate(torch.tensor(true_expl).cuda().unsqueeze(0), (322, 322), mode='bicubic'))).squeeze(0))
 
@@ -96,8 +98,8 @@ for img_path in tqdm(filepath_list):
     expr_path = f"results/val_seed_{seed}_pred_orig_eval_orig_transform_both_sign_all_reduction_sum/{img_name}_expl_{expl_method}_sample_2000_sigma_0.05_seed_{seed}_orig_true_config.npy" 
     results_path = f"results/val_seed_{seed}_pred_orig_eval_orig_transform_both_sign_all_reduction_sum/{img_name}_expl_{expl_method}_sample_2000_sigma_0.05_seed_{seed}_results.pkl"
 
-    if os.path.exists(results_path):
-        continue
+    # if os.path.exists(results_path):
+    #     continue
 
     orig_img = Image.open(img_path)
     orig_img = tensorize(center_crop_224(resize_322(orig_img))).detach().cuda()
