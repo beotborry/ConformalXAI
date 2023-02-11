@@ -54,11 +54,11 @@ class ConformalExpl:
             T_color = get_color_transform()
 
             if self.transform == "both":
-                # tmp = ToPIL(gauss_noise_tensor(PIL2Tensor(resize_224(self.orig_img))))
-                # transformed_img = imagenet_normalize(tensorize(T_spatial(T_color(tmp))))
-
-                tmp = ToPIL(gauss_noise_tensor(PIL2Tensor(resize_322(self.orig_img))))
+                tmp = ToPIL(gauss_noise_tensor(PIL2Tensor(resize_224(self.orig_img))))
                 transformed_img = imagenet_normalize(tensorize(T_spatial(T_color(tmp))))
+                # else:
+                    # tmp = ToPIL(gauss_noise_tensor(PIL2Tensor(resize_322(self.orig_img))))
+                    # transformed_img = imagenet_normalize(tensorize(T_spatial(T_color(tmp))))
 
             transformed_img = transformed_img.unsqueeze(0).cuda()
 

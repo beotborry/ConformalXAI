@@ -7,6 +7,7 @@ from torchvision import transforms
 from PIL import Image
 import random
 
+from torchvision.transforms import InterpolationMode
 
 def add_noise(img: Image.Image, mean, sd):
     return min(max(0, img + random.normalvariate(mean, sd)), 255)
@@ -21,14 +22,14 @@ def resize_232(img: Image.Image):
 
 def resize_322(img: Image.Image):
     resize = transforms.Compose([
-        transforms.Resize((322, 322))
+        transforms.Resize((322, 322), InterpolationMode.BICUBIC)
     ])
 
     return resize(img)
 
 def resize_224(img):
     resize = transforms.Compose([
-        transforms.Resize((224, 224))
+        transforms.Resize((224, 224), InterpolationMode.BICUBIC)
     ])
     return resize(img)
     
@@ -112,11 +113,11 @@ def get_spatial_transform():
     transform = transforms.Compose([
         transforms.RandomHorizontalFlip(transform_config['flip_horizon']),
         transforms.RandomVerticalFlip(transform_config['flip_vertical']),
-        transforms.RandomRotation((transform_config['rot_angle'], transform_config['rot_angle'])),
+        transforms.RandomRotation((transform_config['rot_angle'], transform_config['rot_angle']), InterpolationMode.BILINEAR),
     ])
 
     inv_transform = transforms.Compose([
-        transforms.RandomRotation((-transform_config['rot_angle'], -transform_config['rot_angle'])),
+        transforms.RandomRotation((-transform_config['rot_angle'], -transform_config['rot_angle']), InterpolationMode.BILINEAR),
         transforms.RandomVerticalFlip(transform_config['flip_vertical']),
         transforms.RandomHorizontalFlip(transform_config['flip_horizon']),
         

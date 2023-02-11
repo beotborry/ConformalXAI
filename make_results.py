@@ -11,6 +11,7 @@ from transform_factory import tensorize, resize_322, center_crop_224
 from utils import set_seed
 from argparse import ArgumentParser
 import pickle
+from torchvision.transforms import InterpolationMode
 
 def calc_score_and_test_expls(true_expls, orig_expl, configs):
     indicies = np.arange(0, 2000, 1)
@@ -23,13 +24,14 @@ def calc_score_and_test_expls(true_expls, orig_expl, configs):
     for true_expl, config in zip(true_expls[cal_idx], configs[cal_idx]):
 
         T_inv_spatial = transforms.Compose([
-            transforms.RandomRotation((-config['rot_angle'], -config['rot_angle'])),
+            transforms.RandomRotation((-config['rot_angle'], -config['rot_angle']), InterpolationMode.BILINEAR),
             transforms.RandomVerticalFlip(config['flip_vertical']),
             transforms.RandomHorizontalFlip(config['flip_horizon']),
             
         ])
         
-        true_expl = center_crop_224(T_inv_spatial(F.interpolate(torch.tensor(true_expl).cuda().unsqueeze(0), (322, 322), mode='bilinear'))).squeeze(0)
+        true_expl = center_crop_224(F.interpolate(T_inv_spatial(torch.tensor(true_expl).cuda().unsqueeze(0), (322, 322), mode='bicubic'))).squeeze(0)
+        # true_expl = center_crop_224(T_inv_spatial(F.interpolate(torch.tensor(true_expl).cuda().unsqueeze(0), (322, 322), mode='bicubic'))).squeeze(0)
         scores.append(torch.abs(true_expl - orig_expl))
     scores = torch.stack(scores)
 
@@ -38,13 +40,14 @@ def calc_score_and_test_expls(true_expls, orig_expl, configs):
     for true_expl, config in zip(true_expls[val_idx], configs[val_idx]):
 
         T_inv_spatial = transforms.Compose([
-            transforms.RandomRotation((-config['rot_angle'], -config['rot_angle'])),
+            transforms.RandomRotation((-config['rot_angle'], -config['rot_angle']), InterpolationMode.BILINEAR),
             transforms.RandomVerticalFlip(config['flip_vertical']),
             transforms.RandomHorizontalFlip(config['flip_horizon']),
             
         ])
         
-        test_expls.append(center_crop_224(T_inv_spatial(F.interpolate(torch.tensor(true_expl).cuda().unsqueeze(0), (322, 322), mode='bilinear'))).squeeze(0))
+        test_expls.append(center_crop_224(F.interpolate(T_inv_spatial(torch.tensor(true_expl).cuda().unsqueeze(0), (322, 322), mode='bicubic'))).squeeze(0))
+        # test_expls.append(center_crop_224(T_inv_spatial(F.interpolate(torch.tensor(true_expl).cuda().unsqueeze(0), (322, 322), mode='bicubic'))).squeeze(0))
 
     test_expls = torch.stack(test_expls)
 
@@ -86,7 +89,7 @@ if __name__ == "__main__":
 with open(f"./val_seed_{seed}.npy", "rb") as f:
     filepath_list = np.load(f)
 
-for img_path in tqdm(filepath_list[:300]):
+for img_path in tqdm(filepath_list):
     img_name = os.path.basename(img_path)
 
 
@@ -105,7 +108,7 @@ for img_path in tqdm(filepath_list[:300]):
         true_expls = np.load(f, allow_pickle=True)
         configs = np.load(f, allow_pickle=True)
 
-    orig_expl = F.interpolate(torch.tensor(orig_expl).cuda().unsqueeze(0), (224, 224), mode='bilinear').squeeze(0)
+    orig_expl = F.interpolate(torch.tensor(orig_expl).cuda().unsqueeze(0), (224, 224), mode='bicubic').squeeze(0)
     scores, test_expls = calc_score_and_test_expls(true_expls, orig_expl, configs)
 
 
