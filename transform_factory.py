@@ -82,7 +82,8 @@ def gauss_noise_tensor(img):
     if not img.is_floating_point():
         img = img.to(torch.float32)
     
-    sigma = 1
+    # sigma = 1
+    sigma = 0.5
     out = img + sigma * torch.randn_like(img)
     
     if out.dtype != dtype:
@@ -102,7 +103,9 @@ def get_spatial_transform():
     transform_config = {
         'flip_horizon' : int(torch.rand(1) > 0.5),
         'flip_vertical' :  int(torch.rand(1) > 0.5),
-        'rot_angle' : (-90 * torch.rand(1) + 45).item(),
+        # 'rot_angle' : (-90 * torch.rand(1) + 45).item(),
+        'rot_angle' : (-360 * torch.rand(1) + 180).item(),
+
         # 'scale' : (0.8 - 1.2) * torch.rand(1) + 1.2,
     }
 
