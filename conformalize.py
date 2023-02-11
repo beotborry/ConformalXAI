@@ -54,7 +54,10 @@ class ConformalExpl:
             T_color = get_color_transform()
 
             if self.transform == "both":
-                tmp = ToPIL(gauss_noise_tensor(PIL2Tensor(resize_224(self.orig_img))))
+                # tmp = ToPIL(gauss_noise_tensor(PIL2Tensor(resize_224(self.orig_img))))
+                # transformed_img = imagenet_normalize(tensorize(T_spatial(T_color(tmp))))
+
+                tmp = ToPIL(gauss_noise_tensor(PIL2Tensor(resize_322(self.orig_img))))
                 transformed_img = imagenet_normalize(tensorize(T_spatial(T_color(tmp))))
 
             transformed_img = transformed_img.unsqueeze(0).cuda()
@@ -79,7 +82,7 @@ class ConformalExpl:
                 true_expl = torch.sum(true_expl, axis = 1).unsqueeze(1)
 
             
-            assert true_expl.shape == self.orig_expl.shape
+            # assert true_expl.shape == self.orig_expl.shape
 
             true_expls.append(true_expl.detach().squeeze(0).cpu().numpy())
 

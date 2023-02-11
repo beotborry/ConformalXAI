@@ -86,7 +86,7 @@ if __name__ == "__main__":
 with open(f"./val_seed_{seed}.npy", "rb") as f:
     filepath_list = np.load(f)
 
-for img_path in tqdm(filepath_list[:128]):
+for img_path in tqdm(filepath_list[:300]):
     img_name = os.path.basename(img_path)
 
 
@@ -124,11 +124,11 @@ for img_path in tqdm(filepath_list[:128]):
             'img': img_name,
             'expl_method': expl_method,
             'alpha': alpha,
-            'coverage_prob': coverage_prob,
+            'coverage_prob': coverage_prob.detach().cpu(),
             'zero_contain_rate': zc_rate,
-            'orig_expl': orig_expl,
-            'conf_high': conf_high,
-            'conf_low': conf_low
+            'orig_expl': orig_expl.detach().cpu(),
+            'conf_high': conf_high.detach().cpu(),
+            'conf_low': conf_low.detach().cpu()
         })
 
     with open(results_path, "wb") as f:
