@@ -82,7 +82,7 @@ if __name__ == "__main__":
         print(len(prob_list))
 
 
-    with open(f"./val_prob_322_then_224_once.npy", "wb") as f:
+    with open(f"./val_prob_test.npy", "wb") as f:
         np.save(f, np.stack(prob_list))
 
     print(total_data)

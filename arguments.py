@@ -30,7 +30,7 @@ def get_args():
 
     parser.add_argument("--seed", type = int, default=0)
     parser.add_argument("--date", type=str)
-    parser.add_argument("--run_option", choices=['all', 'eval', 'pred', 'get_transform'])
+    parser.add_argument("--run_option", choices=['all', 'eval', 'pred', 'test'])
 
     parser.add_argument("--convert_device", action="store_true", default=False)
 

@@ -45,7 +45,7 @@ if __name__ == '__main__':
             conformalizer.evaluate()
         elif args.run_option == 'eval':
             conformalizer.evaluate()
-        elif args.run_option == "pred" or args.run_option == "get_transform":
+        elif args.run_option == "pred" or args.run_option == "test":
             conformalizer.make_confidence_set()
         # conformalizer.logging()
 
