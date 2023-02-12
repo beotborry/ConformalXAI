@@ -19,7 +19,8 @@ class ConformalExpl:
         self.eval_method = args.eval_method
 
 
-        self.temp_img = center_crop_224(resize_322(orig_img))
+        # self.temp_img = center_crop_224(resize_322(orig_img))
+        self.temp_img = resize_224(orig_img)
         self.temp_img = imagenet_normalize(tensorize(self.temp_img))
         self.orig_expl, self.orig_pred = expl_func(self.temp_img.unsqueeze(0).cuda(), "init")
 
