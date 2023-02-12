@@ -15,6 +15,8 @@ def get_args():
 
     parser.add_argument("--split", choices = ['train', 'val'])
     parser.add_argument("--upsample", action="store_true")
+    parser.add_argument("--dataset", choices=["center_crop_224", "resize_224"])
+    parser.add_argument("--orig_input_method", choices=["resize_224", "center_crop_224"])
     '''
     orig : conf_interval is defined as [orig_expl - q_hat, orig_expl + q_hat]
     new : conf_interval is defined as [pred_expl - q_hat, pred_expl + q_hat]

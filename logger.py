@@ -10,7 +10,7 @@ class Logger:
         self.save_path = self.generate_save_path()
 
     def generate_save_path(self):
-        save_path = f"./results/{self.args.date}_pred_{self.args.pred_method}_eval_{self.args.eval_method}_transform_{self.args.transform}_sign_{self.args.sign}_reduction_{self.args.reduction}"
+        save_path = f"./results/{self.args.date}_dataset_{self.args.dataset}_orig_input_method_{self.args.orig_input_method}_pred_{self.args.pred_method}_eval_{self.args.eval_method}_transform_{self.args.transform}_sign_{self.args.sign}_reduction_{self.args.reduction}"
 
         if os.path.exists(save_path) == False:
             os.mkdir(save_path)

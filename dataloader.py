@@ -10,7 +10,7 @@ from tqdm import tqdm
 import torch
 import numpy as np
 import matplotlib.pyplot as plt
-from transform_factory import resize_232, center_crop_224, tensorize, get_spatial_transform, get_color_transform, imagenet_normalize, resize_224
+from transform_factory import resize_232, center_crop_224, tensorize, get_spatial_transform, get_color_transform, imagenet_normalize, resize_224, resize_322
 from logger import Logger
 from tqdm import tqdm
 
@@ -69,8 +69,8 @@ if __name__ == "__main__":
                 continue
 
             total_data += 1
-            img = imagenet_normalize(tensorize(resize_224(img))).cuda()
-            # img = imagenet_normalize(tensorize(resize_322(img))).cuda()
+            # img = imagenet_normalize(tensorize(resize_224(img))).cuda()
+            img = imagenet_normalize(tensorize(center_crop_224(resize_322(img)))).cuda()
 
             pred = model(img.unsqueeze(0))
 
@@ -82,7 +82,7 @@ if __name__ == "__main__":
         print(len(prob_list))
 
 
-    with open(f"./val_prob_test.npy", "wb") as f:
+    with open(f"./val_prob_224_center_cropped.npy", "wb") as f:
         np.save(f, np.stack(prob_list))
 
     print(total_data)

@@ -24,7 +24,7 @@ if __name__ == '__main__':
     # model = resnet34(weights = ResNet34_Weights.DEFAULT).eval().cuda()
 
     if args.img_path is None:
-        with open(f"{args.split}_seed_{args.seed}.npy", "rb") as f:
+        with open(f"{args.split}_{args.dataset}_seed_{args.seed}.npy", "rb") as f:
             img_path_list = np.load(f)
 
     else:
