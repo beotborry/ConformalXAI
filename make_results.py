@@ -84,19 +84,21 @@ if __name__ == "__main__":
     parser = ArgumentParser()
     parser.add_argument("--seed", type=int)
     parser.add_argument("--expl_method", choices=["GradCAM", "LayerIG", "LayerXAct", "LayerDL"])
+    parser.add_argument("--dataset", choices=["center_crop_224", "resize_224"])
+    parser.add_argument("--orig_input_method", choices=["center_crop_224", "resize_224"])
 
     args = parser.parse_args()
     seed = args.seed
     expl_method = args.expl_method
-with open(f"./val_seed_{seed}.npy", "rb") as f:
+with open(f"./val_{args.dataset}_seed_{seed}.npy", "rb") as f:
     filepath_list = np.load(f)
 
 for img_path in tqdm(filepath_list):
     img_name = os.path.basename(img_path)
 
 
-    expr_path = f"results/val_seed_{seed}_pred_orig_eval_orig_transform_both_sign_all_reduction_sum/{img_name}_expl_{expl_method}_sample_2000_sigma_0.05_seed_{seed}_orig_true_config.npy" 
-    results_path = f"results/val_seed_{seed}_pred_orig_eval_orig_transform_both_sign_all_reduction_sum/{img_name}_expl_{expl_method}_sample_2000_sigma_0.05_seed_{seed}_results.pkl"
+    expr_path = f"results/val_seed_{seed}_dataset_{args.dataset}_orig_input_method_{args.orig_input_method}_pred_orig_eval_orig_transform_both_sign_all_reduction_sum/{img_name}_expl_{expl_method}_sample_2000_sigma_0.05_seed_{seed}_orig_true_config.npy" 
+    results_path = f"results/val_seed_{seed}_dataset_{args.dataset}_orig_input_method_{args.orig_input_method}_pred_orig_eval_orig_transform_both_sign_all_reduction_sum/{img_name}_expl_{expl_method}_sample_2000_sigma_0.05_seed_{seed}_results.pkl"
 
     if os.path.exists(results_path):
         continue
@@ -106,7 +108,11 @@ for img_path in tqdm(filepath_list):
         true_expls = np.load(f, allow_pickle=True)
         configs = np.load(f, allow_pickle=True)
 
-    orig_expl = center_crop_224(F.interpolate(torch.tensor(orig_expl).cuda().unsqueeze(0), (322, 322), mode='bicubic')).squeeze()
+    if args.orig_input_method == "center_crop_224":
+        orig_expl = F.interpolate(torch.tensor(orig_expl).cuda().unsqueeze(0), (224, 224), mode='bicubic').squeeze()
+    else:
+        orig_expl = center_crop_224(F.interpolate(torch.tensor(orig_expl).cuda().unsqueeze(0), (322, 322), mode='bicubic')).squeeze()
+
     scores, test_expls = calc_score_and_test_expls(true_expls, orig_expl, configs)
 
 
