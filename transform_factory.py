@@ -113,11 +113,11 @@ def get_spatial_transform():
     transform = transforms.Compose([
         transforms.RandomHorizontalFlip(transform_config['flip_horizon']),
         transforms.RandomVerticalFlip(transform_config['flip_vertical']),
-        transforms.RandomRotation((transform_config['rot_angle'], transform_config['rot_angle'])),
+        transforms.RandomRotation((transform_config['rot_angle'], transform_config['rot_angle']), InterpolationMode.BILINEAR),
     ])
 
     inv_transform = transforms.Compose([
-        transforms.RandomRotation((-transform_config['rot_angle'], -transform_config['rot_angle'])),
+        transforms.RandomRotation((-transform_config['rot_angle'], -transform_config['rot_angle']), InterpolationMode.BILINEAR),
         transforms.RandomVerticalFlip(transform_config['flip_vertical']),
         transforms.RandomHorizontalFlip(transform_config['flip_horizon']),
         

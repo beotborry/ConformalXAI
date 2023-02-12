@@ -24,7 +24,7 @@ def calc_score_and_test_expls(true_expls, orig_expl, configs):
     for true_expl, config in zip(true_expls[cal_idx], configs[cal_idx]):
 
         T_inv_spatial = transforms.Compose([
-            transforms.RandomRotation((-config['rot_angle'], -config['rot_angle'])),
+            transforms.RandomRotation((-config['rot_angle'], -config['rot_angle']), InterpolationMode.BILINEAR),
             transforms.RandomVerticalFlip(config['flip_vertical']),
             transforms.RandomHorizontalFlip(config['flip_horizon']),
             
@@ -42,7 +42,7 @@ def calc_score_and_test_expls(true_expls, orig_expl, configs):
     for true_expl, config in zip(true_expls[val_idx], configs[val_idx]):
 
         T_inv_spatial = transforms.Compose([
-            transforms.RandomRotation((-config['rot_angle'], -config['rot_angle'])),
+            transforms.RandomRotation((-config['rot_angle'], -config['rot_angle']), InterpolationMode.BILINEAR),
             transforms.RandomVerticalFlip(config['flip_vertical']),
             transforms.RandomHorizontalFlip(config['flip_horizon']),
             
@@ -101,17 +101,12 @@ for img_path in tqdm(filepath_list):
     if os.path.exists(results_path):
         continue
 
-    orig_img = Image.open(img_path)
-    orig_img = tensorize(center_crop_224(resize_322(orig_img))).detach().cuda()
-
-
     with open(expr_path, "rb") as f:
         orig_expl = np.load(f, allow_pickle=True)
         true_expls = np.load(f, allow_pickle=True)
         configs = np.load(f, allow_pickle=True)
 
-    orig_expl = center_crop_224(F.interpolate(torch.tensor(orig_expl).cuda().unsqueeze(0), (224, 224), mode='bicubic')).squeeze()
-    # orig_expl = F.interpolate(torch.tensor(orig_expl).cuda().unsqueeze(0), (224, 224), mode='bicubic').squeeze(0)
+    orig_expl = center_crop_224(F.interpolate(torch.tensor(orig_expl).cuda().unsqueeze(0), (322, 322), mode='bicubic')).squeeze()
     scores, test_expls = calc_score_and_test_expls(true_expls, orig_expl, configs)
 
 
@@ -138,6 +133,5 @@ for img_path in tqdm(filepath_list):
         })
 
     with open(results_path, "wb") as f:
-        # np.save(f, np.stack(results))
         pickle.dump(results, f)
 
