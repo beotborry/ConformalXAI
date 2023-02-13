@@ -51,9 +51,10 @@ class ConformalExpl:
         T_spatial_configs = []
         scores = []
         t = 0
+        n_try = 0
         pbar = tqdm(total = self.n_sample)
+    
         while t < self.n_sample:
-            iter_start_time = time.time()
             T_spatial, T_inv_spatial, T_spatial_config = get_spatial_transform()
             T_color = get_color_transform()
 
@@ -67,18 +68,23 @@ class ConformalExpl:
             transformed_img = transformed_img.unsqueeze(0).cuda()
 
             _true_expl, _target = self.expl_func(transformed_img, self.orig_pred)
-            
+            n_try += 1
+            if n_try > 200:
+                self.logger.log_long_time_file(self.img_path)
+                print('skipped long time file!')
+                return
             if _target != self.orig_pred:
                 continue
             else:
                 t += 1
-                pbar.update(1)
-                T_spatial_configs.append(T_spatial_config)
-                iter_end_time = time.time()
-
-                if iter_end_time - iter_start_time > 10:
+                pbar.update(1) 
+                if n_try > 100:
                     self.logger.log_long_time_file(self.img_path)
+                    print('skipped long time file!')
                     return
+                n_try = 0
+
+                T_spatial_configs.append(T_spatial_config)
             # print(_true_expl.shape) # (1, 1, 322, 322)
 
             
