@@ -48,6 +48,6 @@ if __name__ == '__main__':
         elif args.run_option == 'eval':
             conformalizer.evaluate()
         elif args.run_option == "pred" or args.run_option == "test":
-            conformalizer.make_confidence_set()
+            conformalizer.make_confidence_set(start)
         # conformalizer.logging()
 
