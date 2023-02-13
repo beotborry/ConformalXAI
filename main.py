@@ -10,6 +10,7 @@ from tqdm import tqdm
 from torch.nn.parallel import DistributedDataParallel as DDP
 import torch.nn as nn
 import os
+import time
 
 if __name__ == '__main__':
     args = get_args()
@@ -38,6 +39,7 @@ if __name__ == '__main__':
         conformalizer = ConformalExpl(orig_img, expl_func, args, img_path=img_path)
                 
 
+        start = time.time()
         if os.path.exists(f"{conformalizer.logger.save_path}/{conformalizer.logger.base_logname}_orig_true_config.npy"):
             continue
         if args.run_option == 'all':

@@ -71,3 +71,8 @@ class Logger:
             np.save(f, orig)
             np.save(f, true)
             np.save(f, config)
+
+    def log_long_time_file(self, filepath):
+        with open(f"{self.save_path}/{self.base_logname}_long_time_files.txt", "a") as f:
+            f.write(filepath)
+            

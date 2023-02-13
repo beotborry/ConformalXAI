@@ -45,7 +45,7 @@ class ConformalExpl:
 
         print("Original expl shape: ", self.orig_expl.shape)
 
-    def make_confidence_set(self):
+    def make_confidence_set(self, start_time = None):
         print("Make confidence set ...")
         true_expls = []
         T_spatial_configs = []
@@ -73,8 +73,13 @@ class ConformalExpl:
                 t += 1
                 pbar.update(1)
                 T_spatial_configs.append(T_spatial_config)
-                    
+                curr_time = time.time()
+
+                if curr_time > 60 * 15:
+                    self.logger.log_long_time_file(self.img_path)
+
             # print(_true_expl.shape) # (1, 1, 322, 322)
+
             
             if self.upsample:
                 true_expl = center_crop_224(T_inv_spatial(_true_expl))
