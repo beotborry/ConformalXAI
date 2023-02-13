@@ -38,8 +38,6 @@ if __name__ == '__main__':
         expl_func = ExplFactory().get_explainer(model = model, expl_method = args.expl_method, upsample=args.upsample)
         conformalizer = ConformalExpl(orig_img, expl_func, args, img_path=img_path)
                 
-
-        start = time.time()
         if os.path.exists(f"{conformalizer.logger.save_path}/{conformalizer.logger.base_logname}_orig_true_config.npy"):
             continue
         if args.run_option == 'all':
@@ -48,6 +46,6 @@ if __name__ == '__main__':
         elif args.run_option == 'eval':
             conformalizer.evaluate()
         elif args.run_option == "pred" or args.run_option == "test":
-            conformalizer.make_confidence_set(start)
+            conformalizer.make_confidence_set()
         # conformalizer.logging()
 

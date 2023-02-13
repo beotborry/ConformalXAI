@@ -45,7 +45,7 @@ class ConformalExpl:
 
         print("Original expl shape: ", self.orig_expl.shape)
 
-    def make_confidence_set(self, start_time = None):
+    def make_confidence_set(self):
         print("Make confidence set ...")
         true_expls = []
         T_spatial_configs = []
@@ -53,6 +53,7 @@ class ConformalExpl:
         t = 0
         pbar = tqdm(total = self.n_sample)
         while t < self.n_sample:
+            iter_start_time = time.time()
             T_spatial, T_inv_spatial, T_spatial_config = get_spatial_transform()
             T_color = get_color_transform()
 
@@ -73,11 +74,11 @@ class ConformalExpl:
                 t += 1
                 pbar.update(1)
                 T_spatial_configs.append(T_spatial_config)
-                curr_time = time.time()
+                iter_end_time = time.time()
 
-                if curr_time > 60 * 15:
+                if iter_end_time - iter_start_time > 10:
                     self.logger.log_long_time_file(self.img_path)
-
+                    return
             # print(_true_expl.shape) # (1, 1, 322, 322)
 
             
