@@ -106,8 +106,6 @@ class AOPCTestor():
     def test_step(self, expl, img, label, mode="insertion", transform=None, configs=None):
         prob_list = []
 
-
-        torch.save(img[0], "img.pt")
         for ratio in np.arange(0, 1, 0.05):
 
             img_p = self.perturbation(expl, img, ratio=ratio, mode=mode)

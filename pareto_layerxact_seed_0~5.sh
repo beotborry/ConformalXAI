@@ -1,6 +1,6 @@
 n_sample=2000
 
-for seed in 0 1 2 3 4
+for seed in 1
 do
     for split in 'val'
     do
