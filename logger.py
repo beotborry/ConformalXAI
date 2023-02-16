@@ -80,3 +80,12 @@ class Logger:
         with open(f"{self.save_path}/{self.base_logname}_transform_config.txt", "a") as f:
             # f.write(f"{op_name}_{magnitude}\n")
             f.write(f"{str(config)}\n")
+    
+    def remove_last_line(self):
+        with open(f"{self.save_path}/{self.base_logname}_transform_config.txt", "r") as f:
+            lines = f.readlines()
+
+        lines.pop()
+
+        with open(f"{self.save_path}/{self.base_logname}_transform_config.txt", "w") as f:
+            f.writelines(lines)

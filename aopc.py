@@ -14,7 +14,7 @@ from torchvision.transforms import InterpolationMode
 
 class ConfAOPCTestor():
     def __init__(self, model) -> None:
-        self.model = model
+        self.model = model.cuda()
         self.softmax = torch.nn.Softmax(dim = 1)
 
     @staticmethod
@@ -30,11 +30,16 @@ class ConfAOPCTestor():
         base_mask = expl > threshold.reshape(len(expl), 1, 1).unsqueeze(1)
 
         # our mask generating
-        order = (mask * expl).flatten(1).argsort(descending=True)
+        # order = (mask * expl).flatten(1).argsort(descending=True)
+        order = (mask * conf_high).flatten(1).argsort(descending=True)
         n_perturb = (r * ratio * order.shape[1]).type(torch.LongTensor).squeeze()
         n_order = order[range(len(expl)), n_perturb]
-        threshold = (mask * expl).flatten(1)[range(len(expl)), n_order]
-        our_mask = (mask * expl) > threshold.reshape(len(expl), 1, 1).unsqueeze(1)
+        # threshold = (mask * expl).flatten(1)[range(len(expl)), n_order]
+        threshold = (mask * conf_high).flatten(1)[range(len(expl)), n_order]
+
+        # our_mask = (mask * expl) > threshold.reshape(len(expl), 1, 1).unsqueeze(1)
+        our_mask = (mask * conf_high) > threshold.reshape(len(expl), 1, 1).unsqueeze(1)
+
 
         return (base_mask * img).detach(), (our_mask * img).detach()
 
@@ -44,7 +49,6 @@ class ConfAOPCTestor():
         our_prob_list = []
         for r in np.arange(0, 1.05, 0.05):
             img_base, img_our = self.perturbation(expl, img, r, conf_high, conf_low, mode=mode)
-
 
             if transform is not None:
                 for i in range(len(config)):
@@ -57,25 +61,22 @@ class ConfAOPCTestor():
                         img_base[i] = t(img_base[i])
                         img_our[i] = t(img_our[i])
 
-            # T_spatial, T_inv_spatial, config = get_spatial_transform()
-            # T_color = get_color_transform()
-
-            # img_base = T_color(T_spatial(img_base))
-            # img_our = T_color(T_spatial(img_our))
-
-            logit = self.model(img_base)
+            logit = self.model(img_base.cuda())
             del img_base
             prob_base = self.softmax(logit)
             del logit
 
-            base_prob_list.append(prob_base[range(len(label)), label].detach().mean())
+            base_prob_list.append(prob_base[range(len(label)), label].detach().mean().item())
 
-            logit = self.model(img_our)
+            del prob_base
+
+            logit = self.model(img_our.cuda())
             del img_our
             prob_our = self.softmax(logit)
-            our_prob_list.append(prob_our[range(len(label)), label].detach().mean())
+            our_prob_list.append(prob_our[range(len(label)), label].detach().mean().item())
+            del prob_our
 
-            # print(r, base_prob_list[-1], our_prob_list[-1])
+            print(r, base_prob_list[-1], our_prob_list[-1])
         return base_prob_list, our_prob_list
 
 class AOPCTestor():
@@ -137,7 +138,7 @@ if __name__ == "__main__":
     parser.add_argument("--dataset", default="center_crop_224")
     parser.add_argument("--orig_input_method", default="center_crop_224")
     parser.add_argument("--mode", choices=['insertion', 'deletion'])
-    parser.add_argument("--tester", choices=['OrigAOPC', 'ConfAOPC'])
+    parser.add_argument("--tester", choices=['OrigAOPC', 'ConfAOPC', 'ConfAOPC_high'])
     parser.add_argument("--transform", type=str, nargs="+", default=None)
 
     args = parser.parse_args()
@@ -154,7 +155,7 @@ if __name__ == "__main__":
     log_name_base = f"./aopc_results/{args.tester}_transform_{args.transform}_mode_{args.mode}_expl_method_{expl_method}_seed_{args.seed}"
     print(vars(args))
 
-    if args.tester == 'ConfAOPC':
+    if args.tester == 'ConfAOPC' or args.tester == "ConfAOPC_high":
         tester = ConfAOPCTestor(model)
     elif args.tester == 'OrigAOPC':
         tester = AOPCTestor(model)
@@ -182,11 +183,7 @@ if __name__ == "__main__":
             if args.transform is not None:
             
                 orig_img = imagenet_normalize(tensorize(center_crop_224(resize_322(orig_img_pil))))
-
-                if args.tester == "OrigAOPC":
-                    y = model(orig_img.unsqueeze(0).cuda()).argmax(dim = 1)
-                else:
-                    y = model(orig_img.unsqueeze(0)).argmax(dim = 1)
+                y = model(orig_img.unsqueeze(0).cuda()).argmax(dim = 1)
 
                 while True:                
                     with torch.no_grad():
@@ -205,10 +202,7 @@ if __name__ == "__main__":
                         elif "spatial" in args.transform:
                             transformed_img = imagenet_normalize(tensorize(T_spatial(_transformed_img)))
 
-                        if args.tester == "OrigAOPC":
-                            logit = model(transformed_img.unsqueeze(0).cuda())
-                        else:
-                            logit = model(transformed_img.unsqueeze(0))
+                        logit = model(transformed_img.unsqueeze(0).cuda())
 
                         if y == logit.argmax(dim = 1):                    
                             if "color" in args.transform:
@@ -238,10 +232,8 @@ if __name__ == "__main__":
         orig_imgs = torch.stack(orig_imgs)
         orig_expls = torch.tensor(np.stack(orig_expls))
 
-        if args.tester == "ConfAOPC":
-            y = model(orig_imgs).argmax(dim = 1)
-        else:
-            y = model(orig_imgs.cuda()).argmax(dim = 1)
+
+        y = model(orig_imgs.cuda()).argmax(dim = 1)
         conf_highs = []
         conf_lows = []
 
@@ -277,7 +269,7 @@ if __name__ == "__main__":
             log_name = log_name_base + f"_batch_num_{i}.pt"
             torch.save(torch.vstack((orig_prob_list, high_ins_list, low_ins_list)), log_name)
 
-        elif args.tester == "ConfAOPC":
+        elif args.tester == "ConfAOPC" or args.tester == "ConfAOPC_high":
             orig_prob_list, our_prob_list = tester.test_step(orig_expls, orig_imgs, y, conf_highs, conf_lows, transform=args.transform, config=T_spatial_configs)
             orig_prob_list = torch.stack(orig_prob_list)
             our_prob_list = torch.stack(our_prob_list)

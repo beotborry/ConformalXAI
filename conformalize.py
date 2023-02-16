@@ -85,6 +85,7 @@ class ConformalExpl:
                 print('skipped long time file!')
                 return
             if _target != self.orig_pred:
+                self.logger.remove_last_line()
                 continue
             else:
                 t += 1
