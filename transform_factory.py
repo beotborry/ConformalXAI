@@ -288,7 +288,25 @@ class TrivialAugmentWide(torch.nn.Module):
 
 
         for i in range(len(op_meta) - 1):
-            op_index = i
+            if torch.rand(1) > 0.5:
+                op_index = i
+                op_name = list(op_meta.keys())[op_index]
+                magnitudes, signed = op_meta[op_name]
+                magnitude = (
+                    float(magnitudes[torch.randint(len(magnitudes), (1,), dtype=torch.long)].item())
+                    if magnitudes.ndim > 0
+                    else 0.0
+                )
+                if signed and torch.randint(2, (1,)):
+                    magnitude *= -1.0
+
+                img = _apply_op(img, op_name, magnitude, interpolation=self.interpolation, fill=fill)
+                config.append((op_name, magnitude))
+
+            else: continue
+        
+        if torch.rand(1) > 0.5:
+            op_index = len(op_meta) - 1
             op_name = list(op_meta.keys())[op_index]
             magnitudes, signed = op_meta[op_name]
             magnitude = (
@@ -302,24 +320,13 @@ class TrivialAugmentWide(torch.nn.Module):
             img = _apply_op(img, op_name, magnitude, interpolation=self.interpolation, fill=fill)
             config.append((op_name, magnitude))
 
+        self.logger.save_transform_config(config)   
 
-        op_index = len(op_meta) - 1
-        op_name = list(op_meta.keys())[op_index]
-        magnitudes, signed = op_meta[op_name]
-        magnitude = (
-            float(magnitudes[torch.randint(len(magnitudes), (1,), dtype=torch.long)].item())
-            if magnitudes.ndim > 0
-            else 0.0
-        )
-        if signed and torch.randint(2, (1,)):
-            magnitude *= -1.0
-
-        img = _apply_op(img, op_name, magnitude, interpolation=self.interpolation, fill=fill)
-        config.append((op_name, magnitude))
-
-        self.logger.save_transform_config(config)
-        
-        return _apply_op(img, op_name, magnitude, interpolation=self.interpolation, fill=fill)
+        if len(config) == 1:
+            return _apply_op(img, "Identity", 0.0, interpolation=self.interpolation, fill = fill)
+        else:
+            return _apply_op(img, op_name, magnitude, interpolation=self.interpolation, fill=fill)
+            
     def __repr__(self) -> str:
         s = (
             f"{self.__class__.__name__}("

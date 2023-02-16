@@ -173,7 +173,7 @@ if __name__ == "__main__":
 
             img_name = os.path.basename(img_path)
             
-            if os.path.exists(f"results/val_seed_{seed}_dataset_{dataset}_orig_input_method_{orig_input_method}_pred_orig_eval_orig_transform_both_sign_all_reduction_sum/{img_name}_expl_{expl_method}_sample_2000_sigma_0.05_seed_{seed}_orig_true_config.npy") == False:
+            if os.path.exists(f"results/recent_results/val_seed_{seed}_dataset_{dataset}_orig_input_method_{orig_input_method}_pred_orig_eval_orig_transform_both_sign_all_reduction_sum/{img_name}_expl_{expl_method}_sample_2000_sigma_0.05_seed_{seed}_orig_true_config.npy") == False:
                 continue
 
             orig_img_pil = Image.open(img_path)
@@ -227,7 +227,7 @@ if __name__ == "__main__":
                 orig_imgs.append(orig_img)
 
             
-            with open(f"results/val_seed_{seed}_dataset_{dataset}_orig_input_method_{orig_input_method}_pred_orig_eval_orig_transform_both_sign_all_reduction_sum/{img_name}_expl_{expl_method}_sample_2000_sigma_0.05_seed_{seed}_orig_true_config.npy", "rb") as f:
+            with open(f"results/recent_results/val_seed_{seed}_dataset_{dataset}_orig_input_method_{orig_input_method}_pred_orig_eval_orig_transform_both_sign_all_reduction_sum/{img_name}_expl_{expl_method}_sample_2000_sigma_0.05_seed_{seed}_orig_true_config.npy", "rb") as f:
                 orig_expl = np.load(f, allow_pickle=True)
                 true_expls = np.load(f, allow_pickle=True)
                 configs = np.load(f, allow_pickle=True)
@@ -252,7 +252,7 @@ if __name__ == "__main__":
             
 
             try:
-                with open(f"results/val_seed_{seed}_dataset_{dataset}_orig_input_method_{orig_input_method}_pred_orig_eval_orig_transform_both_sign_all_reduction_sum/{img_name}_expl_{expl_method}_sample_2000_sigma_0.05_seed_{seed}_results.pkl", "rb") as f:
+                with open(f"results/recent_results/val_seed_{seed}_dataset_{dataset}_orig_input_method_{orig_input_method}_pred_orig_eval_orig_transform_both_sign_all_reduction_sum/{img_name}_expl_{expl_method}_sample_2000_sigma_0.05_seed_{seed}_results.pkl", "rb") as f:
                     results = np.load(f, allow_pickle=True)
 
                 result = results[0]
@@ -278,7 +278,7 @@ if __name__ == "__main__":
             torch.save(torch.vstack((orig_prob_list, high_ins_list, low_ins_list)), log_name)
 
         elif args.tester == "ConfAOPC":
-            orig_prob_list, our_prob_list = tester.test_step(orig_expls, orig_imgs, y, conf_highs, conf_lows)
+            orig_prob_list, our_prob_list = tester.test_step(orig_expls, orig_imgs, y, conf_highs, conf_lows, transform=args.transform, config=T_spatial_configs)
             orig_prob_list = torch.stack(orig_prob_list)
             our_prob_list = torch.stack(our_prob_list)
 
