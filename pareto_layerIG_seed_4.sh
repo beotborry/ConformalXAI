@@ -8,7 +8,7 @@ do
         do
             for expl in "LayerIG"
             do
-                python3 main.py --expl_method $expl --alpha 0.05 --n_sample $n_sample --device 3  \
+                python3 main.py --expl_method $expl --alpha 0.05 --n_sample $n_sample --device 2  \
                 --eval_method "orig" --pred_method "orig" --seed $seed --transform "both" --sigma $sigma --date "${split}_seed_${seed}" \
                 --reduction 'none' --sign 'all' --run_option 'pred' --reduction 'sum' --split $split --dataset "center_crop_224" --orig_input_method "center_crop_224"
             done
