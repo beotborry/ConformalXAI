@@ -36,6 +36,8 @@ def get_args():
 
     parser.add_argument("--convert_device", action="store_true", default=False)
 
+    parser.add_argument("--model", choices=['resnet50', 'resnet20'], default='resnet50')
+    parser.add_argument("--data", choices=['imagenet', 'cifar10'], default='imagenet')
     args = parser.parse_args()
 
     return args

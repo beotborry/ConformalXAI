@@ -7,48 +7,128 @@ import torch.nn.functional as F
 import torch
 import matplotlib.pyplot as plt
 from argparse import ArgumentParser
+from transform_factory import get_spatial_transform, get_color_transform, ToPIL, PIL2Tensor, gauss_noise_tensor
+from torchvision import transforms
+from torchvision.transforms import InterpolationMode
+
 
 class ConfAOPCTestor():
     def __init__(self, model) -> None:
-        self.model = model.cuda()
+        self.model = model
         self.softmax = torch.nn.Softmax(dim = 1)
 
     @staticmethod
-    def perturbation(expl, img, conf_high, conf_low, mode='insertion'):
+    def perturbation(expl, img, r,  conf_high, conf_low, mode='insertion'):
         mask = torch.where(torch.logical_and(expl > 0, conf_low > 0), torch.ones_like(expl), 0)
         ratio = mask.flatten(1).sum(1) / (mask.shape[2] * mask.shape[3])
+    
+        # base mask generating
         order = expl.flatten(1).argsort(descending=True)
-        
-        n_perturb = (ratio * order.shape[1]).type(torch.LongTensor).squeeze()
+        n_perturb = (r * ratio * order.shape[1]).type(torch.LongTensor).squeeze()
         n_order = order[range(len(expl)), n_perturb]
         threshold = expl.flatten(1)[range(len(expl)), n_order]
         base_mask = expl > threshold.reshape(len(expl), 1, 1).unsqueeze(1)
 
-        return (base_mask * img).detach(), (mask * img).detach()
+        # our mask generating
+        order = (mask * expl).flatten(1).argsort(descending=True)
+        n_perturb = (r * ratio * order.shape[1]).type(torch.LongTensor).squeeze()
+        n_order = order[range(len(expl)), n_perturb]
+        threshold = (mask * expl).flatten(1)[range(len(expl)), n_order]
+        our_mask = (mask * expl) > threshold.reshape(len(expl), 1, 1).unsqueeze(1)
 
-    def test_step(self, expl, img, label, conf_high, conf_low, mode='insertion'):
+        return (base_mask * img).detach(), (our_mask * img).detach()
 
-        img_base, img_our = self.perturbation(expl, img, conf_high, conf_low, mode=mode)
+    def test_step(self, expl, img, label, conf_high, conf_low, mode='insertion', transform=None, config=None):
 
-        plt.imshow(img_base[3].sum(0))
-        plt.show()
-        plt.imshow(img_our[3].sum(0))
+        base_prob_list = []
+        our_prob_list = []
+        for r in np.arange(0, 1.05, 0.05):
+            img_base, img_our = self.perturbation(expl, img, r, conf_high, conf_low, mode=mode)
 
-        logit = self.model(img_base.cuda())
-        del img_base
-        prob_base = self.softmax(logit)
 
-        aopc_prob_base = prob_base[range(len(label)), label].detach().mean()
+            if transform is not None:
+                for i in range(len(config)):
+                    if "spatial" in transform:
+                        t = transforms.Compose([
+                            transforms.RandomHorizontalFlip(configs[i]['flip_horizon']),
+                            transforms.RandomVerticalFlip(configs[i]['flip_vertical']),
+                            transforms.RandomRotation((configs[i]['rot_angle'], configs[i]['rot_angle']), InterpolationMode.BILINEAR),
+                        ])
+                        img_base[i] = t(img_base[i])
+                        img_our[i] = t(img_our[i])
 
-        logit = self.model(img_our.cuda())
-        del img_our
-        prob_our = self.softmax(logit)
-        aopc_prob_our = prob_our[range(len(label)), label].detach().mean()
+            # T_spatial, T_inv_spatial, config = get_spatial_transform()
+            # T_color = get_color_transform()
 
-        print(aopc_prob_base, aopc_prob_our)
+            # img_base = T_color(T_spatial(img_base))
+            # img_our = T_color(T_spatial(img_our))
 
-        # aopc_prob = prob[range(len(label)), label].detach().mean()
-        # prob_list.append(aopc_prob.detach().cpu())
+            logit = self.model(img_base)
+            del img_base
+            prob_base = self.softmax(logit)
+            del logit
+
+            base_prob_list.append(prob_base[range(len(label)), label].detach().mean())
+
+            logit = self.model(img_our)
+            del img_our
+            prob_our = self.softmax(logit)
+            our_prob_list.append(prob_our[range(len(label)), label].detach().mean())
+
+            # print(r, base_prob_list[-1], our_prob_list[-1])
+        return base_prob_list, our_prob_list
+
+class AOPCTestor():
+    def __init__(self, model) -> None:
+        self.model = model.cuda()
+        self.softmax = torch.nn.Softmax(dim = 1)
+
+
+    @staticmethod
+    def perturbation(expl, img, ratio, mode="insertion"):
+    # expl : [B, C=1, H, W]
+    # img : [B, C=3, H, W]
+        if mode == "insertion":
+            order = expl.flatten(1).argsort(descending=True)
+            n_perturb = int(ratio * order.shape[1])
+            n_order = order[:, n_perturb] 
+            threshold = expl.flatten(1)[range(len(expl)), n_order]
+            mask = expl > threshold.reshape(len(expl), 1, 1).unsqueeze(1)
+        elif mode == "deletion":
+            order = expl.flatten(1).argsort()
+            n_perturb = int(ratio * order.shape[1])
+            n_order = order[:, n_perturb]
+            threshold = expl.flatten(1)[range(len(expl)), n_order]
+            mask = expl > threshold.reshape(len(expl), 1, 1).unsqueeze(1)        
+            
+        return (img * mask).detach()
+
+    def test_step(self, expl, img, label, mode="insertion", transform=None, configs=None):
+        prob_list = []
+
+
+        torch.save(img[0], "img.pt")
+        for ratio in np.arange(0, 1, 0.05):
+
+            img_p = self.perturbation(expl, img, ratio=ratio, mode=mode)
+            if transform is not None:
+                for i, _img in enumerate(img_p):
+                    if "spatial" in transform:
+                        t = transforms.Compose([
+                            transforms.RandomHorizontalFlip(configs[i]['flip_horizon']),
+                            transforms.RandomVerticalFlip(configs[i]['flip_vertical']),
+                            transforms.RandomRotation((configs[i]['rot_angle'], configs[i]['rot_angle']), InterpolationMode.BILINEAR),
+                        ])
+                        img_p[i] = t(_img)
+
+            logit = self.model(img_p.cuda())
+            del img_p
+            prob = self.softmax(logit)
+
+            aopc_prob = prob[range(len(label)), label].detach().mean()
+            prob_list.append(aopc_prob.detach().cpu())
+
+        return prob_list
 
 
 if __name__ == "__main__":
@@ -58,6 +138,9 @@ if __name__ == "__main__":
     parser.add_argument("--expl_method")
     parser.add_argument("--dataset", default="center_crop_224")
     parser.add_argument("--orig_input_method", default="center_crop_224")
+    parser.add_argument("--mode", choices=['insertion', 'deletion'])
+    parser.add_argument("--tester", choices=['OrigAOPC', 'ConfAOPC'])
+    parser.add_argument("--transform", type=str, nargs="+", default=None)
 
     args = parser.parse_args()
 
@@ -67,10 +150,17 @@ if __name__ == "__main__":
     expl_method = args.expl_method
     orig_input_method = args.orig_input_method
 
-    batch_size = 128
+    batch_size = 100
     model = resnet50(weights=ResNet50_Weights.DEFAULT).eval()
 
-    tester = ConfAOPCTestor(model)
+    log_name_base = f"./aopc_results/{args.tester}_transform_{args.transform}_mode_{args.mode}_expl_method_{expl_method}_seed_{args.seed}"
+    print(vars(args))
+
+    if args.tester == 'ConfAOPC':
+        tester = ConfAOPCTestor(model)
+    elif args.tester == 'OrigAOPC':
+        tester = AOPCTestor(model)
+
     with open(f"./val_{dataset}_seed_{seed}.npy", "rb") as f:
         filepath_list = np.load(f)
 
@@ -79,14 +169,66 @@ if __name__ == "__main__":
         end = (i + 1) * batch_size
         orig_imgs = []
         orig_expls = []
+        T_spatial_configs = []
         for img_path in filepath_list[start:end]:
+
+
             img_name = os.path.basename(img_path)
+            
+            if os.path.exists(f"results/val_seed_{seed}_dataset_{dataset}_orig_input_method_{orig_input_method}_pred_orig_eval_orig_transform_both_sign_all_reduction_sum/{img_name}_expl_{expl_method}_sample_2000_sigma_0.05_seed_{seed}_orig_true_config.npy") == False:
+                continue
 
             orig_img_pil = Image.open(img_path)
-            orig_img = imagenet_normalize(tensorize(center_crop_224(resize_322(orig_img_pil))))
 
-            orig_imgs.append(orig_img)
 
+            if args.transform is not None:
+            
+                orig_img = imagenet_normalize(tensorize(center_crop_224(resize_322(orig_img_pil))))
+
+                if args.tester == "OrigAOPC":
+                    y = model(orig_img.unsqueeze(0).cuda()).argmax(dim = 1)
+                else:
+                    y = model(orig_img.unsqueeze(0)).argmax(dim = 1)
+
+                while True:                
+                    with torch.no_grad():
+                        T_spatial, T_inv_spatial, config = get_spatial_transform()
+                        T_color = get_color_transform()
+
+                        if "noise" in args.transform:
+                            _transformed_img = ToPIL(gauss_noise_tensor(PIL2Tensor(center_crop_224(resize_322(orig_img_pil))))) 
+                        else:
+                            _transformed_img = center_crop_224(resize_322(orig_img_pil))
+
+                        if "color" in args.transform and "spatial" in args.transform:
+                            transformed_img = imagenet_normalize(tensorize(T_spatial(T_color(_transformed_img))))
+                        elif "color" in args.transform:
+                            transformed_img = imagenet_normalize(tensorize(T_color(_transformed_img)))
+                        elif "spatial" in args.transform:
+                            transformed_img = imagenet_normalize(tensorize(T_spatial(_transformed_img)))
+
+                        if args.tester == "OrigAOPC":
+                            logit = model(transformed_img.unsqueeze(0).cuda())
+                        else:
+                            logit = model(transformed_img.unsqueeze(0))
+
+                        if y == logit.argmax(dim = 1):                    
+                            if "color" in args.transform:
+                                omit_spatial = imagenet_normalize(tensorize(T_color(_transformed_img)))
+                            else:
+                                omit_spatial = imagenet_normalize(tensorize(_transformed_img))
+
+                            orig_imgs.append(omit_spatial)
+                        
+                            if "spatial" in args.transform:
+                                T_spatial_configs.append(config)
+                            break
+
+            else:
+                orig_img = imagenet_normalize(tensorize(center_crop_224(resize_322(orig_img_pil))))
+                orig_imgs.append(orig_img)
+
+            
             with open(f"results/val_seed_{seed}_dataset_{dataset}_orig_input_method_{orig_input_method}_pred_orig_eval_orig_transform_both_sign_all_reduction_sum/{img_name}_expl_{expl_method}_sample_2000_sigma_0.05_seed_{seed}_orig_true_config.npy", "rb") as f:
                 orig_expl = np.load(f, allow_pickle=True)
                 true_expls = np.load(f, allow_pickle=True)
@@ -98,7 +240,10 @@ if __name__ == "__main__":
         orig_imgs = torch.stack(orig_imgs)
         orig_expls = torch.tensor(np.stack(orig_expls))
 
-        y = model(orig_imgs.cuda()).argmax(dim = 1)
+        if args.tester == "ConfAOPC":
+            y = model(orig_imgs).argmax(dim = 1)
+        else:
+            y = model(orig_imgs.cuda()).argmax(dim = 1)
         conf_highs = []
         conf_lows = []
 
@@ -107,16 +252,37 @@ if __name__ == "__main__":
         for img_path in filepath_list[start:end]:
             img_name = os.path.basename(img_path)
             
-            with open(f"results/val_seed_{seed}_dataset_{dataset}_orig_input_method_{orig_input_method}_pred_orig_eval_orig_transform_both_sign_all_reduction_sum/{img_name}_expl_{expl_method}_sample_2000_sigma_0.05_seed_{seed}_results.pkl", "rb") as f:
-                results = np.load(f, allow_pickle=True)
 
-            result = results[0]
+            try:
+                with open(f"results/val_seed_{seed}_dataset_{dataset}_orig_input_method_{orig_input_method}_pred_orig_eval_orig_transform_both_sign_all_reduction_sum/{img_name}_expl_{expl_method}_sample_2000_sigma_0.05_seed_{seed}_results.pkl", "rb") as f:
+                    results = np.load(f, allow_pickle=True)
 
-            conf_highs.append(torch.tensor(result['conf_high']))
-            conf_lows.append(torch.tensor(result['conf_low']))
+                result = results[0]
+
+                conf_highs.append(torch.tensor(result['conf_high']))
+                conf_lows.append(torch.tensor(result['conf_low']))
+            except:
+                continue
 
 
         conf_highs = torch.stack(conf_highs)
         conf_lows = torch.stack(conf_lows)
         
-        tester.test_step(orig_expls, orig_imgs, y, conf_highs, conf_lows)
+        # tester.test_step(orig_expls, orig_imgs, y, conf_highs, conf_lows)
+
+        if args.tester == 'OrigAOPC':
+            print(orig_expls.shape, orig_imgs.shape)
+            orig_prob_list = torch.stack(tester.test_step(orig_expls, orig_imgs, y, args.mode, args.transform, T_spatial_configs))
+            high_ins_list = torch.stack(tester.test_step(conf_highs, orig_imgs, y, args.mode, args.transform, T_spatial_configs))
+            low_ins_list = torch.stack(tester.test_step(conf_lows, orig_imgs, y, args.mode, args.transform, T_spatial_configs))
+
+            log_name = log_name_base + f"_batch_num_{i}.pt"
+            torch.save(torch.vstack((orig_prob_list, high_ins_list, low_ins_list)), log_name)
+
+        elif args.tester == "ConfAOPC":
+            orig_prob_list, our_prob_list = tester.test_step(orig_expls, orig_imgs, y, conf_highs, conf_lows)
+            orig_prob_list = torch.stack(orig_prob_list)
+            our_prob_list = torch.stack(our_prob_list)
+
+            log_name = log_name_base + f"_batch_num_{i}.pt"
+            torch.save(torch.vstack((orig_prob_list, our_prob_list)), log_name)

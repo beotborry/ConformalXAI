@@ -1,10 +1,11 @@
 import torch
 import numpy as np
 import matplotlib.pyplot as plt
-from transform_factory import resize_322, center_crop_224, tensorize, get_spatial_transform, get_color_transform, imagenet_normalize, PIL2Tensor, ToPIL, gauss_noise_tensor, resize_232, resize_224
+from transform_factory import resize_322, center_crop_224, tensorize, get_spatial_transform, get_color_transform, imagenet_normalize, PIL2Tensor, ToPIL, gauss_noise_tensor, resize_224, center_crop_32, resize_46, resize_32
 from logger import Logger
 from tqdm import tqdm
 import time
+from transform_factory import get_trivial_augment
 
 class ConformalExpl:
     def __init__(self, orig_img, expl_func, args, img_path = None) -> None:
@@ -17,12 +18,16 @@ class ConformalExpl:
         self.logger = Logger(args, self.img_path)
         self.pred_method = args.pred_method
         self.eval_method = args.eval_method
+        self.data = args.data
 
-
-        if args.orig_input_method == "center_crop_224":
-            self.temp_img = center_crop_224(resize_322(orig_img))
-        else:
-            self.temp_img = resize_224(orig_img)
+        if self.data == "imagenet":
+            if args.orig_input_method == "center_crop_224":
+                self.temp_img = center_crop_224(resize_322(orig_img))
+            else:
+                self.temp_img = resize_224(orig_img)
+        elif self.data == "cifar10":
+            self.temp_img = center_crop_32(resize_46(orig_img))
+    
         self.temp_img = imagenet_normalize(tensorize(self.temp_img))
         self.orig_expl, self.orig_pred = expl_func(self.temp_img.unsqueeze(0).cuda(), "init")
 
@@ -55,12 +60,18 @@ class ConformalExpl:
         pbar = tqdm(total = self.n_sample)
     
         while t < self.n_sample:
-            T_spatial, T_inv_spatial, T_spatial_config = get_spatial_transform()
-            T_color = get_color_transform()
-
+            
+            T = get_trivial_augment(self.logger)
+            # T_spatial, T_inv_spatial, T_spatial_config = get_spatial_transform()
+            # T_color = get_color_transform()
             if self.transform == "both":
-                tmp = ToPIL(gauss_noise_tensor(PIL2Tensor(resize_224(self.orig_img))))
-                transformed_img = imagenet_normalize(tensorize(T_spatial(T_color(tmp))))
+                if self.data == "imagenet":
+                    tmp = ToPIL(gauss_noise_tensor(PIL2Tensor(resize_224(self.orig_img))))
+                    transformed_img = T(self.orig_img)
+                    # transformed_img = imagenet_normalize(tensorize(T_spatial(T_color(tmp))))
+                elif self.data == "cifar10":
+                    tmp = ToPIL(gauss_noise_tensor(PIL2Tensor(resize_32(self.orig_img))))
+                    transformed_img = imagenet_normalize(tensorize(T_spatial(T_color(tmp))))
                 # else:
                     # tmp = ToPIL(gauss_noise_tensor(PIL2Tensor(resize_322(self.orig_img))))
                     # transformed_img = imagenet_normalize(tensorize(T_spatial(T_color(tmp))))
@@ -84,7 +95,7 @@ class ConformalExpl:
                     return
                 n_try = 0
 
-                T_spatial_configs.append(T_spatial_config)
+                # T_spatial_configs.append(T_spatial_config)
             # print(_true_expl.shape) # (1, 1, 322, 322)
 
             
@@ -103,9 +114,9 @@ class ConformalExpl:
 
 
         true_expls = np.stack(true_expls)
-        T_spatial_configs = np.stack(T_spatial_configs)
+        # T_spatial_configs = np.stack(T_spatial_configs)
         print("True expl shape: ", true_expls.shape)
-        print("Config shape: ", T_spatial_configs.shape)
+        # print("Config shape: ", T_spatial_configs.shape)
 
         self.logger.save_orig_true_config(self.orig_expl.detach().squeeze(0).cpu().numpy(), true_expls, T_spatial_configs)
 

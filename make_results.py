@@ -103,10 +103,13 @@ for img_path in tqdm(filepath_list):
     if os.path.exists(results_path):
         continue
 
-    with open(expr_path, "rb") as f:
-        orig_expl = np.load(f, allow_pickle=True)
-        true_expls = np.load(f, allow_pickle=True)
-        configs = np.load(f, allow_pickle=True)
+    try:
+        with open(expr_path, "rb") as f:
+            orig_expl = np.load(f, allow_pickle=True)
+            true_expls = np.load(f, allow_pickle=True)
+            configs = np.load(f, allow_pickle=True)
+    except:
+        continue
 
     if args.orig_input_method == "center_crop_224":
         orig_expl = F.interpolate(torch.tensor(orig_expl).cuda().unsqueeze(0), (224, 224), mode='bicubic').squeeze()
@@ -122,11 +125,12 @@ for img_path in tqdm(filepath_list):
         q_hat = qhat(scores, alpha)
 
         conf_low, conf_high = get_conf_interval(orig_expl, q_hat)
+    
         
         coverage_prob = calc_coverage_prob(test_expls, conf_low, conf_high)
 
         zc_rate = zero_contain_rate(conf_high, conf_low)
-
+        
         results.append({
             'img': img_name,
             'expl_method': expl_method,
