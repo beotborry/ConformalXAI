@@ -241,6 +241,7 @@ class TrivialAugmentWide(torch.nn.Module):
     def __init__(
         self,
         logger,
+        hflip,
         num_magnitude_bins: int = 31,
         interpolation: InterpolationMode = InterpolationMode.BICUBIC,
         fill: Optional[List[float]] = None,
@@ -250,6 +251,7 @@ class TrivialAugmentWide(torch.nn.Module):
         self.interpolation = interpolation
         self.fill = fill
         self.logger = logger
+        self.hflip = hflip
 
     def _augmentation_space(self, num_bins: int) -> Dict[str, Tuple[Tensor, bool]]:
         return {
@@ -282,7 +284,9 @@ class TrivialAugmentWide(torch.nn.Module):
 
         op_meta = self._augmentation_space(self.num_magnitude_bins)
 
-        config = []
+        config = [('hflip', self.hflip)]
+
+
         for i in range(len(op_meta) - 1):
             op_index = i
             op_name = list(op_meta.keys())[op_index]
@@ -354,7 +358,7 @@ def get_trivial_augment(logger):
     trans = [
         transforms.RandomHorizontalFlip(transform_config['flip_horizon']),
         ]
-    operator = TrivialAugmentWide(interpolation=InterpolationMode.BICUBIC, logger=logger)
+    operator = TrivialAugmentWide(interpolation=InterpolationMode.BICUBIC, logger=logger, hflip=transform_config['flip_horizon'])
     trans.append(operator)
     trans.extend([
         transforms.PILToTensor(),
