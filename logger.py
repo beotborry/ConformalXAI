@@ -76,6 +76,7 @@ class Logger:
         with open(f"{self.save_path}/{self.base_logname}_long_time_files.txt", "a") as f:
             f.write(filepath)
             
-    def save_transform_config(self, op_name, magnitude):
+    def save_transform_config(self, config):
         with open(f"{self.save_path}/{self.base_logname}_transform_config.txt", "a") as f:
-            f.write(f"{op_name}_{magnitude}\n")
+            # f.write(f"{op_name}_{magnitude}\n")
+            f.write(f"{str(config)}\n")

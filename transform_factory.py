@@ -281,7 +281,25 @@ class TrivialAugmentWide(torch.nn.Module):
                 fill = [float(f) for f in fill]
 
         op_meta = self._augmentation_space(self.num_magnitude_bins)
-        op_index = int(torch.randint(len(op_meta), (1,)).item())
+
+        config = []
+        for i in range(len(op_meta) - 1):
+            op_index = i
+            op_name = list(op_meta.keys())[op_index]
+            magnitudes, signed = op_meta[op_name]
+            magnitude = (
+                float(magnitudes[torch.randint(len(magnitudes), (1,), dtype=torch.long)].item())
+                if magnitudes.ndim > 0
+                else 0.0
+            )
+            if signed and torch.randint(2, (1,)):
+                magnitude *= -1.0
+
+            img = _apply_op(img, op_name, magnitude, interpolation=self.interpolation, fill=fill)
+            config.append((op_name, magnitude))
+
+
+        op_index = len(op_meta) - 1
         op_name = list(op_meta.keys())[op_index]
         magnitudes, signed = op_meta[op_name]
         magnitude = (
@@ -292,9 +310,11 @@ class TrivialAugmentWide(torch.nn.Module):
         if signed and torch.randint(2, (1,)):
             magnitude *= -1.0
 
-        self.logger.save_transform_config(op_name, magnitude)
-        
+        img = _apply_op(img, op_name, magnitude, interpolation=self.interpolation, fill=fill)
+        config.append((op_name, magnitude))
 
+        self.logger.save_transform_config(config)
+        
         return _apply_op(img, op_name, magnitude, interpolation=self.interpolation, fill=fill)
     def __repr__(self) -> str:
         s = (
