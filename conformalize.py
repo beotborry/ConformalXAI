@@ -66,7 +66,8 @@ class ConformalExpl:
             # T_color = get_color_transform()
             if self.transform == "both":
                 if self.data == "imagenet":
-                    tmp = ToPIL(gauss_noise_tensor(PIL2Tensor(resize_224(self.orig_img))))
+                    tmp = resize_224(self.orig_img)
+                    # tmp = ToPIL(gauss_noise_tensor(PIL2Tensor(resize_224(self.orig_img))))
                     transformed_img = T(tmp)
                     # transformed_img = imagenet_normalize(tensorize(T_spatial(T_color(tmp))))
                 elif self.data == "cifar10":

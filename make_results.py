@@ -21,14 +21,20 @@ def calc_score_and_test_expls(true_expls, orig_expl, configs):
 
     scores = []
 
-    for true_expl, config in zip(true_expls[cal_idx], configs[cal_idx]):
+    for true_expl, config in zip(true_expls[cal_idx], configs):
+        config = dict(eval(config))
 
-        T_inv_spatial = transforms.Compose([
-            transforms.RandomRotation((-config['rot_angle'], -config['rot_angle']), InterpolationMode.BILINEAR),
-            transforms.RandomVerticalFlip(config['flip_vertical']),
-            transforms.RandomHorizontalFlip(config['flip_horizon']),
-            
-        ])
+        if 'Rotate' in config.keys():
+            T_inv_spatial = transforms.Compose([
+                transforms.RandomRotation((-config['Rotate'], -config['Rotate']), InterpolationMode.BILINEAR),
+                # transforms.RandomVerticalFlip(config['flip_vertical']),
+                transforms.RandomHorizontalFlip(config['hflip']),
+                
+            ])
+        else:
+            T_inv_spatial = transforms.Compose([
+                transforms.RandomHorizontalFlip(config['hflip']),
+            ])
         
         # true_expl = center_crop_224(resize_322(T_inv_spatial(resize_224(torch.tensor(true_expl).cuda().unsqueeze(0))))).squeeze(0)
 
@@ -39,14 +45,19 @@ def calc_score_and_test_expls(true_expls, orig_expl, configs):
 
 
     test_expls =[]
-    for true_expl, config in zip(true_expls[val_idx], configs[val_idx]):
+    for true_expl, config in zip(true_expls[val_idx], configs):
+        config = dict(eval(config))
 
-        T_inv_spatial = transforms.Compose([
-            transforms.RandomRotation((-config['rot_angle'], -config['rot_angle']), InterpolationMode.BILINEAR),
-            transforms.RandomVerticalFlip(config['flip_vertical']),
-            transforms.RandomHorizontalFlip(config['flip_horizon']),
-            
-        ])
+        if 'Rotate' in config.keys():
+            T_inv_spatial = transforms.Compose([
+                transforms.RandomRotation((-config['Rotate'], -config['Rotate']), InterpolationMode.BILINEAR),
+                transforms.RandomHorizontalFlip(config['hflip']),
+                
+            ])
+        else:
+            T_inv_spatial = transforms.Compose([
+                transforms.RandomHorizontalFlip(config['hflip'])
+            ])
         # test_expls.append(center_crop_224(resize_322(T_inv_spatial(resize_224(torch.tensor(true_expl).cuda().unsqueeze(0))))).squeeze(0))
         # test_expls.append(center_crop_224(F.interpolate(T_inv_spatial(torch.tensor(true_expl).cuda().unsqueeze(0)), (322, 322), mode='bicubic')).squeeze(0))
         test_expls.append(center_crop_224(T_inv_spatial(F.interpolate(torch.tensor(true_expl).cuda().unsqueeze(0), (322, 322), mode='bicubic'))).squeeze(0))
@@ -98,6 +109,7 @@ for img_path in tqdm(filepath_list):
 
 
     expr_path = f"results/val_seed_{seed}_dataset_{args.dataset}_orig_input_method_{args.orig_input_method}_pred_orig_eval_orig_transform_both_sign_all_reduction_sum/{img_name}_expl_{expl_method}_sample_2000_sigma_0.05_seed_{seed}_orig_true_config.npy" 
+    config_path = f"results/val_seed_{seed}_dataset_{args.dataset}_orig_input_method_{args.orig_input_method}_pred_orig_eval_orig_transform_both_sign_all_reduction_sum/{img_name}_expl_{expl_method}_sample_2000_sigma_0.05_seed_{seed}_transform_config.txt" 
     results_path = f"results/val_seed_{seed}_dataset_{args.dataset}_orig_input_method_{args.orig_input_method}_pred_orig_eval_orig_transform_both_sign_all_reduction_sum/{img_name}_expl_{expl_method}_sample_2000_sigma_0.05_seed_{seed}_results.pkl"
 
     if os.path.exists(results_path):
@@ -107,9 +119,14 @@ for img_path in tqdm(filepath_list):
         with open(expr_path, "rb") as f:
             orig_expl = np.load(f, allow_pickle=True)
             true_expls = np.load(f, allow_pickle=True)
-            configs = np.load(f, allow_pickle=True)
+            # configs = np.load(f, allow_pickle=True)
+
+        with open(config_path, "r") as f:
+            configs = f.readlines()
     except:
         continue
+
+    
 
     if args.orig_input_method == "center_crop_224":
         orig_expl = F.interpolate(torch.tensor(orig_expl).cuda().unsqueeze(0), (224, 224), mode='bicubic').squeeze()

@@ -30,15 +30,15 @@ class ConfAOPCTestor():
         base_mask = expl > threshold.reshape(len(expl), 1, 1).unsqueeze(1)
 
         # our mask generating
-        # order = (mask * expl).flatten(1).argsort(descending=True)
-        order = (mask * conf_high).flatten(1).argsort(descending=True)
+        order = (mask * expl).flatten(1).argsort(descending=True)
+        # order = (mask * conf_high).flatten(1).argsort(descending=True)
         n_perturb = (r * ratio * order.shape[1]).type(torch.LongTensor).squeeze()
         n_order = order[range(len(expl)), n_perturb]
-        # threshold = (mask * expl).flatten(1)[range(len(expl)), n_order]
-        threshold = (mask * conf_high).flatten(1)[range(len(expl)), n_order]
+        threshold = (mask * expl).flatten(1)[range(len(expl)), n_order]
+        # threshold = (mask * conf_high).flatten(1)[range(len(expl)), n_order]
 
-        # our_mask = (mask * expl) > threshold.reshape(len(expl), 1, 1).unsqueeze(1)
-        our_mask = (mask * conf_high) > threshold.reshape(len(expl), 1, 1).unsqueeze(1)
+        our_mask = (mask * expl) > threshold.reshape(len(expl), 1, 1).unsqueeze(1)
+        # our_mask = (mask * conf_high) > threshold.reshape(len(expl), 1, 1).unsqueeze(1)
 
 
         return (base_mask * img).detach(), (our_mask * img).detach()
@@ -66,14 +66,14 @@ class ConfAOPCTestor():
             prob_base = self.softmax(logit)
             del logit
 
-            base_prob_list.append(prob_base[range(len(label)), label].detach().mean().item())
+            base_prob_list.append(prob_base[range(len(label)), label].detach().mean().cpu())
 
             del prob_base
 
             logit = self.model(img_our.cuda())
             del img_our
             prob_our = self.softmax(logit)
-            our_prob_list.append(prob_our[range(len(label)), label].detach().mean().item())
+            our_prob_list.append(prob_our[range(len(label)), label].detach().mean().cpu())
             del prob_our
 
             print(r, base_prob_list[-1], our_prob_list[-1])
