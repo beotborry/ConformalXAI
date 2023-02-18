@@ -269,33 +269,35 @@ if __name__ == "__main__":
                 
                 y = model(imagenet_normalize(tensorize(orig_img)).unsqueeze(0).cuda()).argmax(dim = 1).unsqueeze(0)
 
-                perturbed_num = 0
-                while perturbed_num < args.perturb_num:
-                    T_color = get_trivial_augment(aopc = True, trans_opt='color')
-                    T_spatial, _, spatial_config = get_spatial_transform()
-                    _orig_img = T_color(orig_img)
-                    logit = model(T_spatial(_orig_img).unsqueeze(0).cuda())
-                    if logit.argmax() == y:
-                        imgs.append(_orig_img)
-                        spatial_configs.append(spatial_config)
-                        perturbed_num += 1
-                    else:
-                        continue
 
-                imgs = torch.stack(imgs)
+                for _ in range(10):
+                    perturbed_num = 0
+                    while perturbed_num < args.perturb_num:
+                        T_color = get_trivial_augment(aopc = True, trans_opt='color')
+                        T_spatial, _, spatial_config = get_spatial_transform()
+                        _orig_img = T_color(orig_img)
+                        logit = model(T_spatial(_orig_img).unsqueeze(0).cuda())
+                        if logit.argmax() == y:
+                            imgs.append(_orig_img)
+                            spatial_configs.append(spatial_config)
+                            perturbed_num += 1
+                        else:
+                            continue
 
-                orig_prob_list, our_prob_list = tester.test_step(_orig_expl.repeat(args.perturb_num, 1, 1, 1), imgs, y, _conf_high.repeat(args.perturb_num, 1, 1, 1), _conf_low.repeat(args.perturb_num, 1, 1, 1), transform=['spatial'], configs=spatial_configs)
-                
-                orig_prob_list = torch.stack(orig_prob_list)
-                our_prob_list = torch.stack(our_prob_list)
+                    imgs = torch.stack(imgs)
 
-                _orig_probs += orig_prob_list
-                _our_probs += our_prob_list
+                    orig_prob_list, our_prob_list = tester.test_step(_orig_expl.repeat(args.perturb_num, 1, 1, 1), imgs, y, _conf_high.repeat(args.perturb_num, 1, 1, 1), _conf_low.repeat(args.perturb_num, 1, 1, 1), transform=['spatial'], configs=spatial_configs)
+                    
+                    orig_prob_list = torch.stack(orig_prob_list)
+                    our_prob_list = torch.stack(our_prob_list)
 
-                imgs = []
-                spatial_configs = []
-                perturbed_num = 0
+                    _orig_probs += orig_prob_list
+                    _our_probs += our_prob_list
 
-                print(_orig_probs / args.perturb_num, _our_probs / args.perturb_num)
+                    imgs = []
+                    spatial_configs = []
+                    perturbed_num = 0
+
+                print(_orig_probs / 1000, _our_probs / 1000)
                 log_name = log_name_base + f"_{img_name}.pt"
-                torch.save(torch.vstack((_orig_probs / args.perturb_num, _our_probs / args.perturb_num)), log_name)
+                torch.save(torch.vstack((_orig_probs / 1000, _our_probs / 1000)), log_name)
