@@ -155,11 +155,17 @@ if __name__ == "__main__":
     parser.add_argument("--tester", choices=['OrigAOPC', 'ConfAOPC', 'ConfAOPC_high'])
     parser.add_argument("--transform", type=str, nargs="+", default=None)
     parser.add_argument("--perturb_num", type=int)
+    parser.add_argument("--device", type=int)
+
 
 
     args = parser.parse_args()
 
     set_seed(777)
+    
+    device = torch.device(f'cuda:{args.device}' if torch.cuda.is_available() else 'cpu')
+    torch.cuda.set_device(device)
+    
     dataset = args.dataset
     seed = args.seed
     num_data = args.num_data
