@@ -62,7 +62,7 @@ class ConfAOPCTestor():
         base_prob_list = []
         our_prob_list = []
         for r in np.arange(0, 1.05, 0.05):
-            img_base, img_our = self.perturbation(expl, img, r, conf_high, conf_low, mode=mode)
+            img_base, img_our = self.perturbation(expl, img, r, conf_low, mode=mode)
             if transform is not None:
                 if "spatial" in transform:
                     for idx, config in enumerate(configs):
