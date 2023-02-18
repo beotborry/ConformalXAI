@@ -18,16 +18,17 @@ def calc_score_and_test_expls(true_expls, orig_expl, configs):
     np.random.shuffle(indicies)
 
     cal_idx, val_idx = indicies[:1000], indicies[1000:]
+    configs = np.array(configs)
 
     scores = []
+    cal_expls = []
 
-    for true_expl, config in zip(true_expls[cal_idx], configs):
+    for true_expl, config in zip(true_expls[cal_idx], configs[cal_idx]):
         config = dict(eval(config))
 
         if 'Rotate' in config.keys():
             T_inv_spatial = transforms.Compose([
                 transforms.RandomRotation((-config['Rotate'], -config['Rotate']), InterpolationMode.BILINEAR),
-                # transforms.RandomVerticalFlip(config['flip_vertical']),
                 transforms.RandomHorizontalFlip(config['hflip']),
                 
             ])
@@ -36,17 +37,17 @@ def calc_score_and_test_expls(true_expls, orig_expl, configs):
                 transforms.RandomHorizontalFlip(config['hflip']),
             ])
         
-        # true_expl = center_crop_224(resize_322(T_inv_spatial(resize_224(torch.tensor(true_expl).cuda().unsqueeze(0))))).squeeze(0)
-
-        # true_expl = center_crop_224(F.interpolate(T_inv_spatial(torch.tensor(true_expl).cuda().unsqueeze(0)), (322, 322), mode='bicubic')).squeeze(0)
         true_expl = center_crop_224(T_inv_spatial(F.interpolate(torch.tensor(true_expl).cuda().unsqueeze(0), (322, 322), mode='bicubic'))).squeeze(0)
+
+        cal_expls.append(true_expl)
         scores.append(torch.abs(true_expl - orig_expl))
 
     scores = torch.stack(scores)
+    cal_expls = torch.stack(cal_expls)
 
 
     test_expls =[]
-    for true_expl, config in zip(true_expls[val_idx], configs):
+    for true_expl, config in zip(true_expls[val_idx], configs[val_idx]):
         config = dict(eval(config))
 
         if 'Rotate' in config.keys():
@@ -59,13 +60,11 @@ def calc_score_and_test_expls(true_expls, orig_expl, configs):
             T_inv_spatial = transforms.Compose([
                 transforms.RandomHorizontalFlip(config['hflip'])
             ])
-        # test_expls.append(center_crop_224(resize_322(T_inv_spatial(resize_224(torch.tensor(true_expl).cuda().unsqueeze(0))))).squeeze(0))
-        # test_expls.append(center_crop_224(F.interpolate(T_inv_spatial(torch.tensor(true_expl).cuda().unsqueeze(0)), (322, 322), mode='bicubic')).squeeze(0))
         test_expls.append(center_crop_224(T_inv_spatial(F.interpolate(torch.tensor(true_expl).cuda().unsqueeze(0), (322, 322), mode='bicubic'))).squeeze(0))
 
     test_expls = torch.stack(test_expls)
 
-    return scores, test_expls, cal_idx, val_idx
+    return scores, test_expls, cal_idx, val_idx, cal_expls.mean(0).detach().cpu(), test_expls.mean(0).detach().cpu()
 
 def qhat(score, alpha:float):
     n = score.shape[0]
@@ -135,7 +134,7 @@ for img_path in tqdm(filepath_list):
     else:
         orig_expl = center_crop_224(F.interpolate(torch.tensor(orig_expl).cuda().unsqueeze(0), (322, 322), mode='bicubic')).squeeze()
 
-    scores, test_expls, cal_idx, val_idx = calc_score_and_test_expls(true_expls, orig_expl, configs)
+    scores, test_expls, cal_idx, val_idx, cal_average, val_average = calc_score_and_test_expls(true_expls, orig_expl, configs)
 
 
     results = []
@@ -159,6 +158,8 @@ for img_path in tqdm(filepath_list):
             'orig_expl': orig_expl.detach().cpu(),
             'conf_high': conf_high.detach().cpu(),
             'conf_low': conf_low.detach().cpu(),
+            'cal_average' : cal_average,
+            'val_average' : val_average,
             'cal_idx': cal_idx,
             'val_idx': val_idx
         })

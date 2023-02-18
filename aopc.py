@@ -11,6 +11,7 @@ from transform_factory import get_spatial_transform, get_color_transform, ToPIL,
 from torchvision import transforms
 from torchvision.transforms import InterpolationMode
 from tqdm import tqdm
+from utils import set_seed
 
 
 def load_results(filename, alpha):
@@ -30,7 +31,7 @@ class ConfAOPCTestor():
         self.softmax = torch.nn.Softmax(dim = 1)
 
     @staticmethod
-    def perturbation(expl, img, r,  conf_high, conf_low, mode='insertion'):
+    def perturbation(expl, img, r, conf_high, conf_low, mode='insertion'):
         mask = torch.where(torch.logical_and(expl > 0, conf_low > 0), torch.ones_like(expl), 0)
         ratio = mask.flatten(1).sum(1) / (mask.shape[2] * mask.shape[3])
 
@@ -43,10 +44,16 @@ class ConfAOPCTestor():
 
         # our mask generating
         order = (mask * expl).flatten(1).argsort(descending=True)
+        # order = (mask * conf_high).flatten(1).argsort(descending=True)
+        
         n_perturb = (r * ratio * order.shape[1]).type(torch.LongTensor).squeeze()
         n_order = order[range(len(expl)), n_perturb]
         threshold = (mask * expl).flatten(1)[range(len(expl)), n_order]
+        # threshold = (mask * conf_high).flatten(1)[range(len(expl)), n_order]
+
         our_mask = (mask * expl) > threshold.reshape(len(expl), 1, 1).unsqueeze(1)
+        # our_mask = (mask * conf_high) > threshold.reshape(len(expl), 1, 1).unsqueeze(1)
+
 
 
         return (base_mask * img).detach(), (our_mask * img).detach()
@@ -54,33 +61,45 @@ class ConfAOPCTestor():
     def test_step(self, expl, img, label, conf_high, conf_low, mode='insertion', transform=None, configs=None):
         base_prob_list = []
         our_prob_list = []
-        for r in np.arange(0, 1, 0.05):
-            img_base, img_our = self.perturbation(expl, img, r, conf_high, conf_low, mode=mode)
-            if transform is not None:
-                if "spatial" in transform:
-                    for idx, config in enumerate(configs):
-                        t = transforms.Compose([
-                            transforms.RandomHorizontalFlip(config['flip_horizon']),
-                            transforms.RandomRotation((config['rot_angle'], config['rot_angle']), InterpolationMode.BILINEAR),
-                        ])
-                        img_base[idx] = t(img_base[idx])
-                        img_our[idx] = t(img_our[idx])
+        # for r in np.arange(0, 1.05, 0.05):
+        r = 1
+        img_base, img_our = self.perturbation(expl, img, r, conf_high, conf_low, mode=mode)
 
-            logit = self.model(img_base.cuda())
-            del img_base
-            prob_base = self.softmax(logit)
-            del logit
+        torch.save(img_base, "img_base.pt")
+        torch.save(img_our, "img_our.pt")
 
-            base_prob_list.append(prob_base[:, label[0]].detach().sum().cpu())
+        if transform is not None:
+            if "spatial" in transform:
+                for idx, config in enumerate(configs):
+                    t = transforms.Compose([
+                        transforms.RandomHorizontalFlip(config['flip_horizon']),
+                        transforms.RandomRotation((config['rot_angle'], config['rot_angle']), InterpolationMode.BILINEAR),
+                    ])
+                    img_base[idx] = t(img_base[idx])
+                    img_our[idx] = t(img_our[idx])
 
-            del prob_base
 
-            logit = self.model(img_our.cuda())
-            del img_our
-            prob_our = self.softmax(logit)
-            our_prob_list.append(prob_our[:, label[0]].detach().sum().cpu())
+        torch.save(img_base, "img_base_spatial.pt")
+        torch.save(img_our, "img_our_spatial.pt")
 
-            del prob_our
+
+        logit = self.model(img_base.cuda())
+        del img_base
+        prob_base = self.softmax(logit)
+        del logit
+
+        base_prob_list.append(prob_base[:, label[0]].detach().sum().cpu())
+
+        del prob_base
+
+        logit = self.model(img_our.cuda())
+        del img_our
+        prob_our = self.softmax(logit)
+        our_prob_list.append(prob_our[:, label[0]].detach().sum().cpu())
+
+        del prob_our
+
+        print(base_prob_list[-1], our_prob_list[-1])
         return base_prob_list, our_prob_list
 
 class AOPCTestor():
@@ -144,9 +163,12 @@ if __name__ == "__main__":
     parser.add_argument("--mode", choices=['insertion', 'deletion'])
     parser.add_argument("--tester", choices=['OrigAOPC', 'ConfAOPC', 'ConfAOPC_high'])
     parser.add_argument("--transform", type=str, nargs="+", default=None)
+    parser.add_argument("--perturb_num", type=int)
+
 
     args = parser.parse_args()
 
+    set_seed(777)
     dataset = args.dataset
     seed = args.seed
     num_data = args.num_data
@@ -178,9 +200,8 @@ if __name__ == "__main__":
         conf_lows = []
         cal_indices = []
         val_indices = []
-        transform_configs =[]
 
-        alpha = 0.1
+        alpha = 0.05
 
         # load results
         for img_path in filepath_list[start:end]:
@@ -220,15 +241,9 @@ if __name__ == "__main__":
                 orig_expl = F.interpolate(torch.tensor(orig_expl).unsqueeze(0), (224, 224), mode='bicubic').squeeze(0).numpy()
                 orig_expls.append(orig_expl)
 
-            with open(f"results/val_seed_{seed}_dataset_{dataset}_orig_input_method_{orig_input_method}_pred_orig_eval_orig_transform_both_sign_all_reduction_sum/{img_name}_expl_{expl_method}_sample_2000_sigma_0.05_seed_{seed}_transform_config.txt", "r") as f:
-                config = np.array(f.readlines())[val_indices[idx]]
-                transform_configs.append(config)
             idx += 1
 
         orig_expls = torch.tensor(np.stack(orig_expls))
-        transform_configs = np.stack(transform_configs)
-        print(transform_configs.shape)
-
  
 
         if args.tester == 'OrigAOPC':
@@ -244,7 +259,7 @@ if __name__ == "__main__":
             torch.save(torch.vstack((orig_prob_list, high_ins_list, low_ins_list)), log_name)
 
         elif args.tester == "ConfAOPC":
-            for img_name, orig_expl, orig_img, conf_high, conf_low, configs in zip(img_names, orig_expls, orig_imgs, conf_highs, conf_lows, transform_configs):
+            for img_name, orig_expl, orig_img, conf_high, conf_low in zip(img_names, orig_expls, orig_imgs, conf_highs, conf_lows):
                 _orig_expl = orig_expl.unsqueeze(0)
                 _conf_high = conf_high.unsqueeze(0)
                 _conf_low = conf_low.unsqueeze(0)
@@ -257,45 +272,34 @@ if __name__ == "__main__":
                 
                 y = model(imagenet_normalize(tensorize(orig_img)).unsqueeze(0).cuda()).argmax(dim = 1).unsqueeze(0)
 
-                for i, config in enumerate(tqdm(configs)):
-                    config = eval(config)
-                    T_color = get_trivial_augment(config = config, color_only=True)
+                perturbed_num = 0
+                while perturbed_num < args.perturb_num:
+                    T_color = get_trivial_augment(aopc = True, trans_opt='color')
+                    T_spatial, _, spatial_config = get_spatial_transform()
                     _orig_img = T_color(orig_img)
-                    imgs.append(_orig_img)
-
-                    config = dict(config)
-                    T_spatial_config = {
-                        'flip_horizon': config['hflip'],
-                    }
-                    if 'Rotate' in config.keys():
-                        T_spatial_config.update({
-                            'rot_angle': config['Rotate']
-                        })
+                    logit = model(T_spatial(_orig_img).unsqueeze(0).cuda())
+                    if logit.argmax() == y:
+                        print(torch.nn.Softmax()(logit).max())
+                        imgs.append(_orig_img)
+                        spatial_configs.append(spatial_config) #FIXME: transform is changed everytime
+                        perturbed_num += 1
                     else:
-                        T_spatial_config.update({
-                            'rot_angle': 0
-                        })
+                        continue
 
-                    spatial_configs.append(T_spatial_config)
-                    if (i + 1) % 128 == 0:
-                        imgs = torch.stack(imgs)
-                        orig_prob_list, our_prob_list = tester.test_step(_orig_expl.repeat(128, 1, 1, 1), imgs, y, _conf_high.repeat(128, 1, 1, 1), _conf_low.repeat(128, 1, 1, 1), transform=['spatial'], configs=spatial_configs)
+                imgs = torch.stack(imgs)
 
-                        orig_prob_list = torch.stack(orig_prob_list)
-                        our_prob_list = torch.stack(our_prob_list)
+                orig_prob_list, our_prob_list = tester.test_step(_orig_expl.repeat(args.perturb_num, 1, 1, 1), imgs, y, _conf_high.repeat(args.perturb_num, 1, 1, 1), _conf_low.repeat(args.perturb_num, 1, 1, 1), transform=['spatial'], configs=spatial_configs)
+                
+                orig_prob_list = torch.stack(orig_prob_list)
+                our_prob_list = torch.stack(our_prob_list)
 
-                        _orig_probs += orig_prob_list
-                        _our_probs += our_prob_list
+                _orig_probs += orig_prob_list
+                _our_probs += our_prob_list
 
-                        imgs = []
-                        spatial_configs = []
+                imgs = []
+                spatial_configs = []
+                perturbed_num = 0
 
-                        print(_orig_probs.shape, _our_probs.shape)
-                        break
-                    
-                _orig_probs /= 128
-                _our_probs /= 128
-                print(_orig_probs, _our_probs)
-
+                print(_orig_probs / args.perturb_num, _our_probs / args.perturb_num)
                 log_name = log_name_base + f"_{img_name}.pt"
-                torch.save(torch.vstack((_orig_probs, _our_probs)), log_name)
+                torch.save(torch.vstack((_orig_probs / args.perturb_num, _our_probs / args.perturb_num)), log_name)

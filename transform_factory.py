@@ -108,22 +108,35 @@ def ToPIL(img):
 
 
 def get_spatial_transform():
+    transform_space = {
+        "Rotate": (torch.linspace(0.0, 135.0, 31), True),
+    }
+
+
+    magnitudes, signed = transform_space['Rotate']
+    rot_angle = (
+        float(magnitudes[torch.randint(len(magnitudes), (1,), dtype=torch.long)].item())
+        if magnitudes.ndim > 0
+        else 0.0
+    )
+    if signed and torch.randint(2, (1,)):
+        rot_angle *= -1.0
+
     transform_config = {
         'flip_horizon' : int(torch.rand(1) > 0.5),
-        'flip_vertical' :  int(torch.rand(1) > 0.5),
-        'rot_angle' : (-360 * torch.rand(1) + 180).item(),
+        'rot_angle' : rot_angle,
 
     }
 
     transform = transforms.Compose([
         transforms.RandomHorizontalFlip(transform_config['flip_horizon']),
-        transforms.RandomVerticalFlip(transform_config['flip_vertical']),
+        # transforms.RandomVerticalFlip(transform_config['flip_vertical']),
         transforms.RandomRotation((transform_config['rot_angle'], transform_config['rot_angle']), InterpolationMode.BILINEAR),
     ])
 
     inv_transform = transforms.Compose([
         transforms.RandomRotation((-transform_config['rot_angle'], -transform_config['rot_angle']), InterpolationMode.BILINEAR),
-        transforms.RandomVerticalFlip(transform_config['flip_vertical']),
+        # transforms.RandomVerticalFlip(transform_config['flip_vertical']),
         transforms.RandomHorizontalFlip(transform_config['flip_horizon']),
         
     ])
@@ -243,7 +256,7 @@ class TrivialAugmentWide(torch.nn.Module):
         logger,
         hflip,
         config = None,
-        color_only=False,
+        trans_opt='all',
         num_magnitude_bins: int = 31,
         interpolation: InterpolationMode = InterpolationMode.BICUBIC,
         fill: Optional[List[float]] = None,
@@ -255,21 +268,40 @@ class TrivialAugmentWide(torch.nn.Module):
         self.logger = logger
         self.hflip = hflip
         self.config = config
-        self.color_only = color_only
+        self.trans_opt = trans_opt
 
     def _augmentation_space(self, num_bins: int) -> Dict[str, Tuple[Tensor, bool]]:
-        return {
-            # op_name: (magnitudes, signed)
-            "Rotate": (torch.linspace(0.0, 135.0, num_bins), True),
-            "Brightness": (torch.linspace(0.0, 0.99, num_bins), True),
-            "Color": (torch.linspace(0.0, 0.99, num_bins), True),
-            "Contrast": (torch.linspace(0.0, 0.99, num_bins), True),
-            "Sharpness": (torch.linspace(0.0, 0.99, num_bins), True),
-            "Posterize": (8 - (torch.arange(num_bins) / ((num_bins - 1) / 6)).round().int(), False),
-            "Solarize": (torch.linspace(255.0, 0.0, num_bins), False),
-            "AutoContrast": (torch.tensor(0.0), False),
-            "Equalize": (torch.tensor(0.0), False),
-        }
+
+        if self.trans_opt == 'all':
+            return {
+                # op_name: (magnitudes, signed)
+                "Rotate": (torch.linspace(0.0, 135.0, num_bins), True),
+                "Brightness": (torch.linspace(0.0, 0.99, num_bins), True),
+                "Color": (torch.linspace(0.0, 0.99, num_bins), True),
+                "Contrast": (torch.linspace(0.0, 0.99, num_bins), True),
+                "Sharpness": (torch.linspace(0.0, 0.99, num_bins), True),
+                "Posterize": (8 - (torch.arange(num_bins) / ((num_bins - 1) / 6)).round().int(), False),
+                "Solarize": (torch.linspace(255.0, 0.0, num_bins), False),
+                "AutoContrast": (torch.tensor(0.0), False),
+                "Equalize": (torch.tensor(0.0), False),
+            }
+        elif self.trans_opt == 'color':
+            return {
+                # op_name: (magnitudes, signed)
+                "Brightness": (torch.linspace(0.0, 0.99, num_bins), True),
+                "Color": (torch.linspace(0.0, 0.99, num_bins), True),
+                "Contrast": (torch.linspace(0.0, 0.99, num_bins), True),
+                "Sharpness": (torch.linspace(0.0, 0.99, num_bins), True),
+                "Posterize": (8 - (torch.arange(num_bins) / ((num_bins - 1) / 6)).round().int(), False),
+                "Solarize": (torch.linspace(255.0, 0.0, num_bins), False),
+                "AutoContrast": (torch.tensor(0.0), False),
+                "Equalize": (torch.tensor(0.0), False),
+            }
+        elif self.trans_opt == 'spatial':
+            return {
+                # op_name: (magnitudes, signed)
+                "Rotate": (torch.linspace(0.0, 135.0, num_bins), True),
+            }
 
     def forward(self, img: Tensor) -> Tensor:
         """
@@ -332,15 +364,7 @@ class TrivialAugmentWide(torch.nn.Module):
                 return _apply_op(img, "Identity", 0.0, interpolation=self.interpolation, fill = fill)
             else:
                 return _apply_op(img, op_name, magnitude, interpolation=self.interpolation, fill=fill)
-        else:
-            for i in range(len(self.config)):
-                op_name, magnitude = self.config[i]
-                if op_name == 'Rotate' and self.color_only:
-                    continue
-                img = _apply_op(img, op_name, magnitude, interpolation=self.interpolation, fill=fill)
 
-            op_name, magnitude = self.config[-1]
-            return _apply_op(img, op_name, magnitude, interpolation=self.interpolation, fill = fill)
 
     def __repr__(self) -> str:
         s = (
@@ -376,11 +400,11 @@ class AddGaussianNoise(object):
         return img
 
 
-def get_trivial_augment(logger=None, config=None, color_only = False, noise_std = 1.0):
+def get_trivial_augment(logger=None, aopc=False, trans_opt = 'all', noise_std = 0.05):
     mean = [0.485, 0.456, 0.406]
     std = [0.229, 0.224, 0.225]
 
-    if config is None:
+    if aopc == False:
         transform_config = {
             'flip_horizon': int(torch.rand(1) > 0.5)
         }
@@ -398,23 +422,29 @@ def get_trivial_augment(logger=None, config=None, color_only = False, noise_std 
 
         ])
     else:
-        if color_only == False:
+        if trans_opt == 'color':
             trans = [
-                transforms.RandomHorizontalFlip(config[0][1])
+                AddGaussianNoise(mean=0.0, std=noise_std)
             ]
-        else:
-            trans = []
 
-        if len(config) > 1:
-            operator = TrivialAugmentWide(interpolation=InterpolationMode.BICUBIC, logger=logger, hflip=config[0][1], config=config[1:], color_only=color_only)
+            operator = TrivialAugmentWide(interpolation=InterpolationMode.BICUBIC, logger=logger, hflip=None, trans_opt=trans_opt)
             trans.append(operator)
-    
-        trans.extend([
-            transforms.PILToTensor(),
-            transforms.ConvertImageDtype(torch.float),
-            transforms.Normalize(mean = mean, std = std),
+        
+            trans.extend([
+                transforms.PILToTensor(),
+                transforms.ConvertImageDtype(torch.float),
+                transforms.Normalize(mean = mean, std = std),
 
-        ])
+            ])
+        elif trans_opt == 'spatial':
+            transform_config = {
+                'flip_horizon': int(torch.rand(1) > 0.5)
+            }
+            trans = [
+                transforms.RandomHorizontalFlip(transform_config['flip_horizon'])
+            ]
+            operator = TrivialAugmentWide(interpolation=InterpolationMode.BILINEAR, logger=logger, hflip=transform_config['flip_horizon'], trans_opt=trans_opt)
+            trans.append(operator)
 
-    return transforms.Compose(trans)
+        return transforms.Compose(trans)
 
