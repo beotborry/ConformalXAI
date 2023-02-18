@@ -257,6 +257,10 @@ if __name__ == "__main__":
 
         elif args.tester == "ConfAOPC":
             for img_name, orig_expl, orig_img, conf_high, conf_low in zip(img_names, orig_expls, orig_imgs, conf_highs, conf_lows):
+                log_name = log_name_base + f"_{img_name}.pt"
+                if os.path.exists(log_name):
+                    continue
+
                 _orig_expl = orig_expl.unsqueeze(0)
                 # _conf_high = conf_high.unsqueeze(0)
                 _conf_low = conf_low.unsqueeze(0)
@@ -299,5 +303,4 @@ if __name__ == "__main__":
                     perturbed_num = 0
 
                 print(_orig_probs / 1000, _our_probs / 1000)
-                log_name = log_name_base + f"_{img_name}.pt"
                 torch.save(torch.vstack((_orig_probs / 1000, _our_probs / 1000)), log_name)
