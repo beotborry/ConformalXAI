@@ -41,6 +41,7 @@ def calc_score_and_test_expls(true_expls, orig_expl, configs):
         # true_expl = center_crop_224(F.interpolate(T_inv_spatial(torch.tensor(true_expl).cuda().unsqueeze(0)), (322, 322), mode='bicubic')).squeeze(0)
         true_expl = center_crop_224(T_inv_spatial(F.interpolate(torch.tensor(true_expl).cuda().unsqueeze(0), (322, 322), mode='bicubic'))).squeeze(0)
         scores.append(torch.abs(true_expl - orig_expl))
+
     scores = torch.stack(scores)
 
 
@@ -64,13 +65,14 @@ def calc_score_and_test_expls(true_expls, orig_expl, configs):
 
     test_expls = torch.stack(test_expls)
 
-    return scores, test_expls
+    return scores, test_expls, cal_idx, val_idx
 
 def qhat(score, alpha:float):
     n = score.shape[0]
     q_hat = torch.quantile(score, np.ceil((n+1) * (1-alpha)) / n, axis = 0)
 
     return q_hat
+
 
 def get_conf_interval(expl, q_hat):
     high = expl + q_hat
@@ -112,8 +114,8 @@ for img_path in tqdm(filepath_list):
     config_path = f"results/val_seed_{seed}_dataset_{args.dataset}_orig_input_method_{args.orig_input_method}_pred_orig_eval_orig_transform_both_sign_all_reduction_sum/{img_name}_expl_{expl_method}_sample_2000_sigma_0.05_seed_{seed}_transform_config.txt" 
     results_path = f"results/val_seed_{seed}_dataset_{args.dataset}_orig_input_method_{args.orig_input_method}_pred_orig_eval_orig_transform_both_sign_all_reduction_sum/{img_name}_expl_{expl_method}_sample_2000_sigma_0.05_seed_{seed}_results.pkl"
 
-    if os.path.exists(results_path):
-        continue
+    # if os.path.exists(results_path):
+    #     continue
 
     try:
         with open(expr_path, "rb") as f:
@@ -133,7 +135,7 @@ for img_path in tqdm(filepath_list):
     else:
         orig_expl = center_crop_224(F.interpolate(torch.tensor(orig_expl).cuda().unsqueeze(0), (322, 322), mode='bicubic')).squeeze()
 
-    scores, test_expls = calc_score_and_test_expls(true_expls, orig_expl, configs)
+    scores, test_expls, cal_idx, val_idx = calc_score_and_test_expls(true_expls, orig_expl, configs)
 
 
     results = []
@@ -156,7 +158,9 @@ for img_path in tqdm(filepath_list):
             'zero_contain_rate': zc_rate,
             'orig_expl': orig_expl.detach().cpu(),
             'conf_high': conf_high.detach().cpu(),
-            'conf_low': conf_low.detach().cpu()
+            'conf_low': conf_low.detach().cpu(),
+            'cal_idx': cal_idx,
+            'val_idx': val_idx
         })
 
     with open(results_path, "wb") as f:

@@ -38,6 +38,7 @@ def get_args():
 
     parser.add_argument("--model", choices=['resnet50', 'resnet20'], default='resnet50')
     parser.add_argument("--data", choices=['imagenet', 'cifar10'], default='imagenet')
+    parser.add_argument("--with_config", action='store_true')
     args = parser.parse_args()
 
     return args

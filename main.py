@@ -51,7 +51,11 @@ if __name__ == '__main__':
             orig_img = Image.open(img_path)
             expl_func = ExplFactory().get_explainer(model = model, expl_method = args.expl_method, upsample=args.upsample)
             conformalizer = ConformalExpl(orig_img, expl_func, args, img_path=img_path)
-                    
+            
+            if args.with_config:
+                with open(f"{conformalizer.logger.save_path}/{conformalizer.logger.base_logname}_transform_config.txt", "r") as f:
+                    transform_configs = f.readlines()
+                        
             if os.path.exists(f"{conformalizer.logger.save_path}/{conformalizer.logger.base_logname}_orig_true_config.npy"):
                 continue
             if args.run_option == 'all':
@@ -60,8 +64,10 @@ if __name__ == '__main__':
             elif args.run_option == 'eval':
                 conformalizer.evaluate()
             elif args.run_option == "pred" or args.run_option == "test":
-                conformalizer.make_confidence_set()
-            # conformalizer.logging()
+                if args.with_config:
+                    conformalizer.make_confidence_set(transform_configs)
+                else:
+                    conformalizer.make_confidence_set()
     elif args.data == 'cifar10':
         val_loader = torch.utils.data.DataLoader(
             datasets.CiIFAR10(root='./data', train=False), batch_size=1, shuffle=False, pin_memory=True

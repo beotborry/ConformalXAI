@@ -50,7 +50,7 @@ class ConformalExpl:
 
         print("Original expl shape: ", self.orig_expl.shape)
 
-    def make_confidence_set(self):
+    def make_confidence_set(self, transform_configs=None):
         print("Make confidence set ...")
         true_expls = []
         T_spatial_configs = []
@@ -61,21 +61,18 @@ class ConformalExpl:
     
         while t < self.n_sample:
             
-            T = get_trivial_augment(self.logger)
-            # T_spatial, T_inv_spatial, T_spatial_config = get_spatial_transform()
-            # T_color = get_color_transform()
+
             if self.transform == "both":
                 if self.data == "imagenet":
                     tmp = resize_224(self.orig_img)
-                    # tmp = ToPIL(gauss_noise_tensor(PIL2Tensor(resize_224(self.orig_img))))
-                    transformed_img = T(tmp)
-                    # transformed_img = imagenet_normalize(tensorize(T_spatial(T_color(tmp))))
-                elif self.data == "cifar10":
-                    tmp = ToPIL(gauss_noise_tensor(PIL2Tensor(resize_32(self.orig_img))))
-                    transformed_img = imagenet_normalize(tensorize(T_spatial(T_color(tmp))))
-                # else:
-                    # tmp = ToPIL(gauss_noise_tensor(PIL2Tensor(resize_322(self.orig_img))))
-                    # transformed_img = imagenet_normalize(tensorize(T_spatial(T_color(tmp))))
+                    if transform_configs is None:
+                        T = get_trivial_augment(logger=self.logger, noise_std=self.noise_sigma)
+                        transformed_img = T(tmp)
+                    else:
+                        transform_config = eval(transform_configs[t])
+
+                        T = get_trivial_augment(self.logger, transform_config)
+                        transformed_img = T(tmp)
 
             transformed_img = transformed_img.unsqueeze(0).cuda()
 
@@ -96,10 +93,6 @@ class ConformalExpl:
                     print('skipped long time file!')
                     return
                 n_try = 0
-
-                # T_spatial_configs.append(T_spatial_config)
-            # print(_true_expl.shape) # (1, 1, 322, 322)
-
             
             if self.upsample:
                 true_expl = center_crop_224(T_inv_spatial(_true_expl))
@@ -109,16 +102,12 @@ class ConformalExpl:
             if self.reduction == 'sum':
                 true_expl = torch.sum(true_expl, axis = 1).unsqueeze(1)
 
-            
-            # assert true_expl.shape == self.orig_expl.shape
 
             true_expls.append(true_expl.detach().squeeze(0).cpu().numpy())
 
 
         true_expls = np.stack(true_expls)
-        # T_spatial_configs = np.stack(T_spatial_configs)
         print("True expl shape: ", true_expls.shape)
-        # print("Config shape: ", T_spatial_configs.shape)
 
         self.logger.save_orig_true_config(self.orig_expl.detach().squeeze(0).cpu().numpy(), true_expls, T_spatial_configs)
 

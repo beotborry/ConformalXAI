@@ -1,6 +1,6 @@
 import functools
 from captum.attr import LayerGradCam, LayerAttribution, IntegratedGradients, InputXGradient, GuidedBackprop, LRP, Occlusion, Saliency, DeepLift, LayerIntegratedGradients, LayerGradientXActivation, LayerConductance, LayerDeepLift, LayerActivation
-from captum.attr import LayerLRP
+from captum.attr import LayerLRP, NoiseTunnel
 from captum.attr import visualization as viz
 
 
@@ -176,3 +176,20 @@ def get_layerDL(model, layer, upsample, img, orig_target=None):
         return LayerAttribution.interpolate(attr, img.shape[2:], 'bilinear'), target
     else:
         return attr, target
+
+def get_layerIG_SG(model, layer, upsample, img, orig_target=None):
+    target = model(img).argmax()
+
+    if orig_target != "init" and target != orig_target:
+        return None, target
+    
+    lig = LayerIntegratedGradients(model, layer)
+    nt = NoiseTunnel(lig)
+
+
+    attr = nt.attribute(img, target = target, nt_type='smoothgrad', nt_samples=50)
+    if upsample:
+        return LayerAttribution.interpolate(attr, img.shape[2:], 'bilinear'), target
+    else:
+        return attr, target
+

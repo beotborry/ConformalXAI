@@ -242,6 +242,8 @@ class TrivialAugmentWide(torch.nn.Module):
         self,
         logger,
         hflip,
+        config = None,
+        color_only=False,
         num_magnitude_bins: int = 31,
         interpolation: InterpolationMode = InterpolationMode.BICUBIC,
         fill: Optional[List[float]] = None,
@@ -252,6 +254,8 @@ class TrivialAugmentWide(torch.nn.Module):
         self.fill = fill
         self.logger = logger
         self.hflip = hflip
+        self.config = config
+        self.color_only = color_only
 
     def _augmentation_space(self, num_bins: int) -> Dict[str, Tuple[Tensor, bool]]:
         return {
@@ -284,12 +288,30 @@ class TrivialAugmentWide(torch.nn.Module):
 
         op_meta = self._augmentation_space(self.num_magnitude_bins)
 
-        config = [('hflip', self.hflip)]
 
+        if self.config is None:
+            config = [('hflip', self.hflip)]
 
-        for i in range(len(op_meta) - 1):
+            for i in range(len(op_meta) - 1):
+                if torch.rand(1) > 0.5:
+                    op_index = i
+                    op_name = list(op_meta.keys())[op_index]
+                    magnitudes, signed = op_meta[op_name]
+                    magnitude = (
+                        float(magnitudes[torch.randint(len(magnitudes), (1,), dtype=torch.long)].item())
+                        if magnitudes.ndim > 0
+                        else 0.0
+                    )
+                    if signed and torch.randint(2, (1,)):
+                        magnitude *= -1.0
+
+                    img = _apply_op(img, op_name, magnitude, interpolation=self.interpolation, fill=fill)
+                    config.append((op_name, magnitude))
+
+                else: continue
+            
             if torch.rand(1) > 0.5:
-                op_index = i
+                op_index = len(op_meta) - 1
                 op_name = list(op_meta.keys())[op_index]
                 magnitudes, signed = op_meta[op_name]
                 magnitude = (
@@ -303,30 +325,23 @@ class TrivialAugmentWide(torch.nn.Module):
                 img = _apply_op(img, op_name, magnitude, interpolation=self.interpolation, fill=fill)
                 config.append((op_name, magnitude))
 
-            else: continue
-        
-        if torch.rand(1) > 0.5:
-            op_index = len(op_meta) - 1
-            op_name = list(op_meta.keys())[op_index]
-            magnitudes, signed = op_meta[op_name]
-            magnitude = (
-                float(magnitudes[torch.randint(len(magnitudes), (1,), dtype=torch.long)].item())
-                if magnitudes.ndim > 0
-                else 0.0
-            )
-            if signed and torch.randint(2, (1,)):
-                magnitude *= -1.0
+            if self.logger is not None:
+                self.logger.save_transform_config(config)   
 
-            img = _apply_op(img, op_name, magnitude, interpolation=self.interpolation, fill=fill)
-            config.append((op_name, magnitude))
-
-        self.logger.save_transform_config(config)   
-
-        if len(config) == 1:
-            return _apply_op(img, "Identity", 0.0, interpolation=self.interpolation, fill = fill)
+            if len(config) == 1:
+                return _apply_op(img, "Identity", 0.0, interpolation=self.interpolation, fill = fill)
+            else:
+                return _apply_op(img, op_name, magnitude, interpolation=self.interpolation, fill=fill)
         else:
-            return _apply_op(img, op_name, magnitude, interpolation=self.interpolation, fill=fill)
-            
+            for i in range(len(self.config)):
+                op_name, magnitude = self.config[i]
+                if op_name == 'Rotate' and self.color_only:
+                    continue
+                img = _apply_op(img, op_name, magnitude, interpolation=self.interpolation, fill=fill)
+
+            op_name, magnitude = self.config[-1]
+            return _apply_op(img, op_name, magnitude, interpolation=self.interpolation, fill = fill)
+
     def __repr__(self) -> str:
         s = (
             f"{self.__class__.__name__}("
@@ -337,41 +352,69 @@ class TrivialAugmentWide(torch.nn.Module):
         )
         return s
 
-def AddGaussianNoise(img):
-    assert isinstance(img, torch.Tensor)
-    dtype = img.dtype
-    if not img.is_floating_point():
-        img = img.to(torch.float32)
+class AddGaussianNoise(object):
+    def __init__(self, mean=0.0, std=1.0):
+        self.mean = mean
+        self.std = std
 
-    mean = 0
-    sigma = 4 / (torch.max(img) - torch.min(img)).item()
-    noise = Variable(img.data.new(img.size()).normal_(mean, sigma**2))
+    def __call__(self, img):
+        # Convert the image to a tensor
+        img_tensor = transforms.ToTensor()(img)
 
-    out = img + noise
-    
-    if out.dtype != dtype:
-        out = out.to(dtype)
-        
-    return out
+        # Generate the noise tensor
+        noise = torch.randn(img_tensor.size()) * self.std + self.mean
+
+        # Add the noise to the image tensor
+        img_tensor += noise
+
+        # Clamp the image tensor to the range [0, 1]
+        img_tensor = torch.clamp(img_tensor, 0, 1)
+
+        # Convert the image tensor back to an image
+        img = transforms.ToPILImage()(img_tensor)
+
+        return img
 
 
-def get_trivial_augment(logger):
-    transform_config = {
-        'flip_horizon': int(torch.rand(1) > 0.5)
-    }
+def get_trivial_augment(logger=None, config=None, color_only = False, noise_std = 1.0):
     mean = [0.485, 0.456, 0.406]
     std = [0.229, 0.224, 0.225]
-    
-    trans = [
-        transforms.RandomHorizontalFlip(transform_config['flip_horizon']),
-        ]
-    operator = TrivialAugmentWide(interpolation=InterpolationMode.BICUBIC, logger=logger, hflip=transform_config['flip_horizon'])
-    trans.append(operator)
-    trans.extend([
-        transforms.PILToTensor(),
-        transforms.ConvertImageDtype(torch.float),
-        transforms.Normalize(mean = mean, std = std),
 
-    ])
+    if config is None:
+        transform_config = {
+            'flip_horizon': int(torch.rand(1) > 0.5)
+        }
+
+        trans = [
+            AddGaussianNoise(mean=0.0, std=noise_std),
+            transforms.RandomHorizontalFlip(transform_config['flip_horizon']),
+            ]
+        operator = TrivialAugmentWide(interpolation=InterpolationMode.BICUBIC, logger=logger, hflip=transform_config['flip_horizon'])
+        trans.append(operator)
+        trans.extend([
+            transforms.PILToTensor(),
+            transforms.ConvertImageDtype(torch.float),
+            transforms.Normalize(mean = mean, std = std),
+
+        ])
+    else:
+        if color_only == False:
+            trans = [
+                transforms.RandomHorizontalFlip(config[0][1])
+            ]
+        else:
+            trans = []
+
+        if len(config) > 1:
+            operator = TrivialAugmentWide(interpolation=InterpolationMode.BICUBIC, logger=logger, hflip=config[0][1], config=config[1:], color_only=color_only)
+            trans.append(operator)
+    
+        trans.extend([
+            transforms.PILToTensor(),
+            transforms.ConvertImageDtype(torch.float),
+            transforms.Normalize(mean = mean, std = std),
+
+        ])
 
     return transforms.Compose(trans)
+
