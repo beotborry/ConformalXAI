@@ -61,45 +61,36 @@ class ConfAOPCTestor():
     def test_step(self, expl, img, label, conf_high, conf_low, mode='insertion', transform=None, configs=None):
         base_prob_list = []
         our_prob_list = []
-        # for r in np.arange(0, 1.05, 0.05):
-        r = 1
-        img_base, img_our = self.perturbation(expl, img, r, conf_high, conf_low, mode=mode)
-
-        torch.save(img_base, "img_base.pt")
-        torch.save(img_our, "img_our.pt")
-
-        if transform is not None:
-            if "spatial" in transform:
-                for idx, config in enumerate(configs):
-                    t = transforms.Compose([
-                        transforms.RandomHorizontalFlip(config['flip_horizon']),
-                        transforms.RandomRotation((config['rot_angle'], config['rot_angle']), InterpolationMode.BILINEAR),
-                    ])
-                    img_base[idx] = t(img_base[idx])
-                    img_our[idx] = t(img_our[idx])
+        for r in np.arange(0, 1.05, 0.05):
+            img_base, img_our = self.perturbation(expl, img, r, conf_high, conf_low, mode=mode)
+            if transform is not None:
+                if "spatial" in transform:
+                    for idx, config in enumerate(configs):
+                        t = transforms.Compose([
+                            transforms.RandomHorizontalFlip(config['flip_horizon']),
+                            transforms.RandomRotation((config['rot_angle'], config['rot_angle']), InterpolationMode.BILINEAR),
+                        ])
+                        img_base[idx] = t(img_base[idx])
+                        img_our[idx] = t(img_our[idx])
 
 
-        torch.save(img_base, "img_base_spatial.pt")
-        torch.save(img_our, "img_our_spatial.pt")
+            logit = self.model(img_base.cuda())
+            del img_base
+            prob_base = self.softmax(logit)
+            del logit
 
+            base_prob_list.append(prob_base[:, label[0]].detach().sum().cpu())
 
-        logit = self.model(img_base.cuda())
-        del img_base
-        prob_base = self.softmax(logit)
-        del logit
+            del prob_base
 
-        base_prob_list.append(prob_base[:, label[0]].detach().sum().cpu())
+            logit = self.model(img_our.cuda())
+            del img_our
+            prob_our = self.softmax(logit)
+            our_prob_list.append(prob_our[:, label[0]].detach().sum().cpu())
 
-        del prob_base
+            del prob_our
 
-        logit = self.model(img_our.cuda())
-        del img_our
-        prob_our = self.softmax(logit)
-        our_prob_list.append(prob_our[:, label[0]].detach().sum().cpu())
-
-        del prob_our
-
-        print(base_prob_list[-1], our_prob_list[-1])
+            print(base_prob_list[-1], our_prob_list[-1])
         return base_prob_list, our_prob_list
 
 class AOPCTestor():
@@ -264,8 +255,8 @@ if __name__ == "__main__":
                 _conf_high = conf_high.unsqueeze(0)
                 _conf_low = conf_low.unsqueeze(0)
 
-                _orig_probs = torch.zeros(20)
-                _our_probs = torch.zeros(20)
+                _orig_probs = torch.zeros(21)
+                _our_probs = torch.zeros(21)
                 
                 imgs = []
                 spatial_configs = []
@@ -279,9 +270,8 @@ if __name__ == "__main__":
                     _orig_img = T_color(orig_img)
                     logit = model(T_spatial(_orig_img).unsqueeze(0).cuda())
                     if logit.argmax() == y:
-                        print(torch.nn.Softmax()(logit).max())
                         imgs.append(_orig_img)
-                        spatial_configs.append(spatial_config) #FIXME: transform is changed everytime
+                        spatial_configs.append(spatial_config)
                         perturbed_num += 1
                     else:
                         continue

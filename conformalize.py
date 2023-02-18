@@ -1,7 +1,7 @@
 import torch
 import numpy as np
 import matplotlib.pyplot as plt
-from transform_factory import resize_322, center_crop_224, tensorize, get_spatial_transform, get_color_transform, imagenet_normalize, PIL2Tensor, ToPIL, gauss_noise_tensor, resize_224, center_crop_32, resize_46, resize_32
+from transform_factory import resize_322, center_crop_224, tensorize, get_spatial_transform, get_color_transform, imagenet_normalize, resize_224, center_crop_32, resize_46
 from logger import Logger
 from tqdm import tqdm
 import time
