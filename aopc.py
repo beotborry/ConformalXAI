@@ -31,7 +31,7 @@ class ConfAOPCTestor():
         self.softmax = torch.nn.Softmax(dim = 1)
 
     @staticmethod
-    def perturbation(expl, img, r, conf_high, conf_low, mode='insertion'):
+    def perturbation(expl, img, r, conf_low, mode='insertion'):
         mask = torch.where(torch.logical_and(expl > 0, conf_low > 0), torch.ones_like(expl), 0)
         ratio = mask.flatten(1).sum(1) / (mask.shape[2] * mask.shape[3])
 
@@ -58,7 +58,7 @@ class ConfAOPCTestor():
 
         return (base_mask * img).detach(), (our_mask * img).detach()
 
-    def test_step(self, expl, img, label, conf_high, conf_low, mode='insertion', transform=None, configs=None):
+    def test_step(self, expl, img, label, conf_low, mode='insertion', transform=None, configs=None):
         base_prob_list = []
         our_prob_list = []
         for r in np.arange(0, 1.05, 0.05):
@@ -258,7 +258,7 @@ if __name__ == "__main__":
         elif args.tester == "ConfAOPC":
             for img_name, orig_expl, orig_img, conf_high, conf_low in zip(img_names, orig_expls, orig_imgs, conf_highs, conf_lows):
                 _orig_expl = orig_expl.unsqueeze(0)
-                _conf_high = conf_high.unsqueeze(0)
+                # _conf_high = conf_high.unsqueeze(0)
                 _conf_low = conf_low.unsqueeze(0)
 
                 _orig_probs = torch.zeros(21)
@@ -270,7 +270,7 @@ if __name__ == "__main__":
                 y = model(imagenet_normalize(tensorize(orig_img)).unsqueeze(0).cuda()).argmax(dim = 1).unsqueeze(0)
 
 
-                for _ in range(10):
+                for _ in range(8):
                     perturbed_num = 0
                     while perturbed_num < args.perturb_num:
                         T_color = get_trivial_augment(aopc = True, trans_opt='color')
@@ -286,7 +286,7 @@ if __name__ == "__main__":
 
                     imgs = torch.stack(imgs)
 
-                    orig_prob_list, our_prob_list = tester.test_step(_orig_expl.repeat(args.perturb_num, 1, 1, 1), imgs, y, _conf_high.repeat(args.perturb_num, 1, 1, 1), _conf_low.repeat(args.perturb_num, 1, 1, 1), transform=['spatial'], configs=spatial_configs)
+                    orig_prob_list, our_prob_list = tester.test_step(_orig_expl.repeat(args.perturb_num, 1, 1, 1), imgs, y, _conf_low.repeat(args.perturb_num, 1, 1, 1), transform=['spatial'], configs=spatial_configs)
                     
                     orig_prob_list = torch.stack(orig_prob_list)
                     our_prob_list = torch.stack(our_prob_list)
