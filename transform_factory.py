@@ -425,6 +425,7 @@ def get_trivial_augment(logger=None, aopc=False, trans_opt = 'all', noise_std = 
             transforms.Normalize(mean = mean, std = std),
 
         ])
+        return transforms.Compose(trans)
     else:
         if trans_opt == 'color':
             trans = [
