@@ -82,6 +82,11 @@ class ConfAOPCTestor():
                         img_avg[idx] = t(img_avg[idx])
 
 
+            torch.save(img_base, "img_base.pt")
+            torch.save(img_our, "img_our.pt")
+            torch.save(img_avg, "img_avg.pt")
+
+
             logit = self.model(img_base.cuda())
             del img_base
             prob_base = self.softmax(logit)
