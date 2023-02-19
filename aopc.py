@@ -32,7 +32,7 @@ class ConfAOPCTestor():
         self.softmax = torch.nn.Softmax(dim = 1)
 
     @staticmethod
-    def perturbation(expl, img, r, conf_low, cal_avg, mode='insertion'):
+    def perturbation(expl, img, r, conf_high, conf_low, cal_avg, mode='insertion'):
         mask = torch.where(torch.logical_and(expl > 0, conf_low > 0), torch.ones_like(expl), 0)
         ratio = mask.flatten(1).sum(1) / (mask.shape[2] * mask.shape[3])
 
@@ -44,16 +44,16 @@ class ConfAOPCTestor():
         base_mask = expl > threshold.reshape(len(expl), 1, 1).unsqueeze(1)
 
         # our mask generating
-        order = (mask * expl).flatten(1).argsort(descending=True)
-        # order = (mask * conf_high).flatten(1).argsort(descending=True)
+        # order = (mask * expl).flatten(1).argsort(descending=True)
+        order = (mask * conf_high).flatten(1).argsort(descending=True)
         
         n_perturb = (r * ratio * order.shape[1]).type(torch.LongTensor).squeeze()
         n_order = order[range(len(expl)), n_perturb]
-        threshold = (mask * expl).flatten(1)[range(len(expl)), n_order]
-        # threshold = (mask * conf_high).flatten(1)[range(len(expl)), n_order]
+        # threshold = (mask * expl).flatten(1)[range(len(expl)), n_order]
+        threshold = (mask * conf_high).flatten(1)[range(len(expl)), n_order]
 
-        our_mask = (mask * expl) > threshold.reshape(len(expl), 1, 1).unsqueeze(1)
-        # our_mask = (mask * conf_high) > threshold.reshape(len(expl), 1, 1).unsqueeze(1)
+        # our_mask = (mask * expl) > threshold.reshape(len(expl), 1, 1).unsqueeze(1)
+        our_mask = (mask * conf_high) > threshold.reshape(len(expl), 1, 1).unsqueeze(1)
 
         # cal avg mask
         order = cal_avg.flatten(1).argsort(descending=True)
@@ -64,12 +64,12 @@ class ConfAOPCTestor():
 
         return (base_mask * img).detach(), (our_mask * img).detach(), (cal_avg_mask * img).detach()
 
-    def test_step(self, expl, img, label, conf_low, cal_avg, mode='insertion', transform=None, configs=None):
+    def test_step(self, expl, img, label, conf_high, conf_low, cal_avg, mode='insertion', transform=None, configs=None):
         base_prob_list = []
         our_prob_list = []
         avg_prob_list = []
         for r in np.arange(0, 1.05, 0.1):
-            img_base, img_our, img_avg = self.perturbation(expl, img, r, conf_low, cal_avg,  mode=mode)
+            img_base, img_our, img_avg = self.perturbation(expl, img, r, conf_high, conf_low, cal_avg,  mode=mode)
             if transform is not None:
                 if "spatial" in transform:
                     for idx, config in enumerate(configs):
@@ -281,7 +281,7 @@ if __name__ == "__main__":
                     
 
                 _orig_expl = orig_expl.unsqueeze(0)
-                # _conf_high = conf_high.unsqueeze(0)
+                _conf_high = conf_high.unsqueeze(0)
                 _conf_low = conf_low.unsqueeze(0)
 
                 _orig_probs = torch.zeros(11)
@@ -300,7 +300,6 @@ if __name__ == "__main__":
                     while perturbed_num < args.perturb_num:
                         T_color = get_trivial_augment(aopc = True, trans_opt='color')
                         T_spatial, _, spatial_config = get_spatial_transform()
-                        print(spatial_config)
                         _orig_img = T_color(orig_img)
                         logit = model(T_spatial(_orig_img).unsqueeze(0).cuda())
                         if logit.argmax() == y:
@@ -312,7 +311,7 @@ if __name__ == "__main__":
 
                     imgs = torch.stack(imgs)
 
-                    orig_prob_list, our_prob_list, avg_prob_list = tester.test_step(_orig_expl.repeat(args.perturb_num, 1, 1, 1), imgs, y, _conf_low.repeat(args.perturb_num, 1, 1, 1), cal_avg=cal_average.repeat(args.perturb_num, 1, 1, 1), transform=['spatial'], configs=spatial_configs)
+                    orig_prob_list, our_prob_list, avg_prob_list = tester.test_step(_orig_expl.repeat(args.perturb_num, 1, 1, 1), imgs, y, _conf_high.repeat(args.perturb_num, 1, 1, 1), _conf_low.repeat(args.perturb_num, 1, 1, 1), cal_avg=cal_average.repeat(args.perturb_num, 1, 1, 1), transform=['spatial'], configs=spatial_configs)
                     
                     orig_prob_list = torch.stack(orig_prob_list)
                     our_prob_list = torch.stack(our_prob_list)
