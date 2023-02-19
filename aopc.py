@@ -282,7 +282,9 @@ if __name__ == "__main__":
                 
                 log_name = log_name_base + f"_{img_name}.pt"
                 if os.path.exists(log_name):
+                    print("skipped!")
                     continue
+                    
 
                 _orig_expl = orig_expl.unsqueeze(0)
                 # _conf_high = conf_high.unsqueeze(0)
