@@ -114,6 +114,7 @@ def get_spatial_transform():
 
 
     magnitudes, signed = transform_space['Rotate']
+
     rot_angle = (
         float(magnitudes[torch.randint(len(magnitudes), (1,), dtype=torch.long)].item())
         if magnitudes.ndim > 0
@@ -121,6 +122,9 @@ def get_spatial_transform():
     )
     if signed and torch.randint(2, (1,)):
         rot_angle *= -1.0
+
+    if int(torch.rand(1) > 0.5):
+        rot_angle = 0
 
     transform_config = {
         'flip_horizon' : int(torch.rand(1) > 0.5),
