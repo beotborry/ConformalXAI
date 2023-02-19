@@ -119,8 +119,8 @@ if __name__ == "__main__":
         config_path = f"results/val_seed_{seed}_dataset_{args.dataset}_orig_input_method_{args.orig_input_method}_pred_orig_eval_orig_transform_both_sign_all_reduction_sum/{img_name}_expl_{expl_method}_sample_2000_sigma_0.05_seed_{seed}_transform_config.txt" 
         results_path = f"results/val_seed_{seed}_dataset_{args.dataset}_orig_input_method_{args.orig_input_method}_pred_orig_eval_orig_transform_both_sign_all_reduction_sum/{img_name}_expl_{expl_method}_sample_2000_sigma_0.05_seed_{seed}_results.pkl"
 
-        # if os.path.exists(results_path):
-        #     continue
+        if os.path.exists(results_path):
+            continue
 
         try:
             with open(expr_path, "rb") as f:
