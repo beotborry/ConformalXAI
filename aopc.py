@@ -300,6 +300,7 @@ if __name__ == "__main__":
                     while perturbed_num < args.perturb_num:
                         T_color = get_trivial_augment(aopc = True, trans_opt='color')
                         T_spatial, _, spatial_config = get_spatial_transform()
+                        print(spatial_config)
                         _orig_img = T_color(orig_img)
                         logit = model(T_spatial(_orig_img).unsqueeze(0).cuda())
                         if logit.argmax() == y:
