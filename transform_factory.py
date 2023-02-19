@@ -361,6 +361,7 @@ class TrivialAugmentWide(torch.nn.Module):
                 img = _apply_op(img, op_name, magnitude, interpolation=self.interpolation, fill=fill)
                 config.append((op_name, magnitude))
 
+            print(config)
             if self.logger is not None:
                 self.logger.save_transform_config(config)   
 
