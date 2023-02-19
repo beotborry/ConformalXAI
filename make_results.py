@@ -52,9 +52,7 @@ def calc_score_and_test_expls(true_expls, orig_expl, configs):
     for true_expl, config in zip(true_expls[val_idx], configs[val_idx]):
         config = dict(eval(config))
 
-        print(config)
         if 'Rotate' in config.keys():
-            print("rotate!")
             T_inv_spatial = transforms.Compose([
                 transforms.RandomRotation((-config['Rotate'], -config['Rotate']), InterpolationMode.BILINEAR),
                 transforms.RandomHorizontalFlip(config['hflip']),
