@@ -283,9 +283,9 @@ if __name__ == "__main__":
                 # _conf_high = conf_high.unsqueeze(0)
                 _conf_low = conf_low.unsqueeze(0)
 
-                _orig_probs = torch.zeros(21)
-                _our_probs = torch.zeros(21)
-                _avg_probs = torch.zeros(21)
+                _orig_probs = torch.zeros(11)
+                _our_probs = torch.zeros(11)
+                _avg_probs = torch.zeros(11)
                 
                 imgs = []
                 spatial_configs = []
