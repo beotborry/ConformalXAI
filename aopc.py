@@ -44,16 +44,13 @@ class ConfAOPCTestor():
         base_mask = expl > threshold.reshape(len(expl), 1, 1).unsqueeze(1)
 
         # our mask generating
-        # order = (mask * expl).flatten(1).argsort(descending=True)
-        order = (mask * conf_high).flatten(1).argsort(descending=True)
+        order = (mask * expl).flatten(1).argsort(descending=True)
         
         n_perturb = (r * ratio * order.shape[1]).type(torch.LongTensor).squeeze()
         n_order = order[range(len(expl)), n_perturb]
-        # threshold = (mask * expl).flatten(1)[range(len(expl)), n_order]
-        threshold = (mask * conf_high).flatten(1)[range(len(expl)), n_order]
+        threshold = (mask * expl).flatten(1)[range(len(expl)), n_order]
 
-        # our_mask = (mask * expl) > threshold.reshape(len(expl), 1, 1).unsqueeze(1)
-        our_mask = (mask * conf_high) > threshold.reshape(len(expl), 1, 1).unsqueeze(1)
+        our_mask = (mask * expl) > threshold.reshape(len(expl), 1, 1).unsqueeze(1)
 
         # cal avg mask
         order = cal_avg.flatten(1).argsort(descending=True)
@@ -278,7 +275,6 @@ if __name__ == "__main__":
                 if os.path.exists(log_name):
                     print("skipped!")
                     continue
-                    
 
                 _orig_expl = orig_expl.unsqueeze(0)
                 _conf_high = conf_high.unsqueeze(0)
