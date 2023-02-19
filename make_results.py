@@ -98,72 +98,78 @@ if __name__ == "__main__":
     parser.add_argument("--expl_method", choices=["GradCAM", "LayerIG", "LayerXAct", "LayerDL"])
     parser.add_argument("--dataset", choices=["center_crop_224", "resize_224"])
     parser.add_argument("--orig_input_method", choices=["center_crop_224", "resize_224"])
+    parser.add_argument("--device")
+
 
     args = parser.parse_args()
+            
+    device = torch.device(f'cuda:{args.device}' if torch.cuda.is_available() else 'cpu')
+    torch.cuda.set_device(device)
+
     seed = args.seed
     expl_method = args.expl_method
-with open(f"./val_{args.dataset}_seed_{seed}.npy", "rb") as f:
-    filepath_list = np.load(f)
+    with open(f"./val_{args.dataset}_seed_{seed}.npy", "rb") as f:
+        filepath_list = np.load(f)
 
-for img_path in tqdm(filepath_list):
-    img_name = os.path.basename(img_path)
-
-
-    expr_path = f"results/val_seed_{seed}_dataset_{args.dataset}_orig_input_method_{args.orig_input_method}_pred_orig_eval_orig_transform_both_sign_all_reduction_sum/{img_name}_expl_{expl_method}_sample_2000_sigma_0.05_seed_{seed}_orig_true_config.npy" 
-    config_path = f"results/val_seed_{seed}_dataset_{args.dataset}_orig_input_method_{args.orig_input_method}_pred_orig_eval_orig_transform_both_sign_all_reduction_sum/{img_name}_expl_{expl_method}_sample_2000_sigma_0.05_seed_{seed}_transform_config.txt" 
-    results_path = f"results/val_seed_{seed}_dataset_{args.dataset}_orig_input_method_{args.orig_input_method}_pred_orig_eval_orig_transform_both_sign_all_reduction_sum/{img_name}_expl_{expl_method}_sample_2000_sigma_0.05_seed_{seed}_results.pkl"
-
-    # if os.path.exists(results_path):
-    #     continue
-
-    try:
-        with open(expr_path, "rb") as f:
-            orig_expl = np.load(f, allow_pickle=True)
-            true_expls = np.load(f, allow_pickle=True)
-            # configs = np.load(f, allow_pickle=True)
-
-        with open(config_path, "r") as f:
-            configs = f.readlines()
-    except:
-        continue
-
-    
-
-    if args.orig_input_method == "center_crop_224":
-        orig_expl = F.interpolate(torch.tensor(orig_expl).cuda().unsqueeze(0), (224, 224), mode='bicubic').squeeze()
-    else:
-        orig_expl = center_crop_224(F.interpolate(torch.tensor(orig_expl).cuda().unsqueeze(0), (322, 322), mode='bicubic')).squeeze()
-
-    scores, test_expls, cal_idx, val_idx, cal_average, val_average = calc_score_and_test_expls(true_expls, orig_expl, configs)
+    for img_path in tqdm(filepath_list):
+        img_name = os.path.basename(img_path)
 
 
-    results = []
+        expr_path = f"results/val_seed_{seed}_dataset_{args.dataset}_orig_input_method_{args.orig_input_method}_pred_orig_eval_orig_transform_both_sign_all_reduction_sum/{img_name}_expl_{expl_method}_sample_2000_sigma_0.05_seed_{seed}_orig_true_config.npy" 
+        config_path = f"results/val_seed_{seed}_dataset_{args.dataset}_orig_input_method_{args.orig_input_method}_pred_orig_eval_orig_transform_both_sign_all_reduction_sum/{img_name}_expl_{expl_method}_sample_2000_sigma_0.05_seed_{seed}_transform_config.txt" 
+        results_path = f"results/val_seed_{seed}_dataset_{args.dataset}_orig_input_method_{args.orig_input_method}_pred_orig_eval_orig_transform_both_sign_all_reduction_sum/{img_name}_expl_{expl_method}_sample_2000_sigma_0.05_seed_{seed}_results.pkl"
 
-    for alpha in np.arange(0.05, 1, 0.05):
-        q_hat = qhat(scores, alpha)
+        # if os.path.exists(results_path):
+        #     continue
 
-        conf_low, conf_high = get_conf_interval(orig_expl, q_hat)
-    
+        try:
+            with open(expr_path, "rb") as f:
+                orig_expl = np.load(f, allow_pickle=True)
+                true_expls = np.load(f, allow_pickle=True)
+                # configs = np.load(f, allow_pickle=True)
+
+            with open(config_path, "r") as f:
+                configs = f.readlines()
+        except:
+            continue
+
         
-        coverage_prob = calc_coverage_prob(test_expls, conf_low, conf_high)
 
-        zc_rate = zero_contain_rate(conf_high, conf_low)
+        if args.orig_input_method == "center_crop_224":
+            orig_expl = F.interpolate(torch.tensor(orig_expl).cuda().unsqueeze(0), (224, 224), mode='bicubic').squeeze()
+        else:
+            orig_expl = center_crop_224(F.interpolate(torch.tensor(orig_expl).cuda().unsqueeze(0), (322, 322), mode='bicubic')).squeeze()
+
+        scores, test_expls, cal_idx, val_idx, cal_average, val_average = calc_score_and_test_expls(true_expls, orig_expl, configs)
+
+
+        results = []
+
+        for alpha in np.arange(0.05, 1, 0.05):
+            q_hat = qhat(scores, alpha)
+
+            conf_low, conf_high = get_conf_interval(orig_expl, q_hat)
         
-        results.append({
-            'img': img_name,
-            'expl_method': expl_method,
-            'alpha': alpha,
-            'coverage_prob': coverage_prob.detach().cpu(),
-            'zero_contain_rate': zc_rate,
-            'orig_expl': orig_expl.detach().cpu(),
-            'conf_high': conf_high.detach().cpu(),
-            'conf_low': conf_low.detach().cpu(),
-            'cal_average' : cal_average,
-            'val_average' : val_average,
-            'cal_idx': cal_idx,
-            'val_idx': val_idx
-        })
+            
+            coverage_prob = calc_coverage_prob(test_expls, conf_low, conf_high)
 
-    with open(results_path, "wb") as f:
-        pickle.dump(results, f)
+            zc_rate = zero_contain_rate(conf_high, conf_low)
+            
+            results.append({
+                'img': img_name,
+                'expl_method': expl_method,
+                'alpha': alpha,
+                'coverage_prob': coverage_prob.detach().cpu(),
+                'zero_contain_rate': zc_rate,
+                'orig_expl': orig_expl.detach().cpu(),
+                'conf_high': conf_high.detach().cpu(),
+                'conf_low': conf_low.detach().cpu(),
+                'cal_average' : cal_average,
+                'val_average' : val_average,
+                'cal_idx': cal_idx,
+                'val_idx': val_idx
+            })
+
+        with open(results_path, "wb") as f:
+            pickle.dump(results, f)
 

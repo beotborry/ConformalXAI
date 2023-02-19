@@ -12,6 +12,7 @@ from torchvision import transforms
 from torchvision.transforms import InterpolationMode
 from tqdm import tqdm
 from utils import set_seed
+from torch.nn import DataParallel
 
 
 def load_results(filename, alpha):
@@ -187,6 +188,7 @@ if __name__ == "__main__":
 
     batch_size = 100
     model = resnet50(weights=ResNet50_Weights.DEFAULT).eval()
+    model = DataParallel(model, device_ids=[args.device, args.device + 1])
 
     log_name_base = f"./aopc_results/{args.tester}_transform_{args.transform}_mode_{args.mode}_expl_method_{expl_method}_seed_{args.seed}_perturb_num_{args.perturb_num * args.perturb_iter}"
     print(vars(args))
