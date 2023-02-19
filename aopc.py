@@ -84,7 +84,7 @@ class ConfAOPCTestor():
 
                         img_322[:, 49:273, 49:273] = img_our[idx]
                         img_our[idx] = center_crop_224(t(img_322))
-                        
+
                         img_322[:, 49:273, 49:273] = img_avg[idx]
                         img_avg[idx] = center_crop_224(t(img_322))
 
@@ -316,7 +316,7 @@ if __name__ == "__main__":
                         if logit.argmax() == y:
                             imgs.append(center_crop_224(_orig_img))
                             off_center_img = _orig_img.clone()
-                            off_center_img[:, :, region[1]:region[3], region[0]:region[2]] = 0
+                            off_center_img[:, region[1]:region[3], region[0]:region[2]] = 0
                             off_center_imgs.append(off_center_img)
 
                             spatial_configs.append(spatial_config)
