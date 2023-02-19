@@ -23,8 +23,6 @@ def calc_score_and_test_expls(true_expls, orig_expl, configs):
     scores = []
     cal_expls = []
 
-    temp = []
-
     for true_expl, config in zip(true_expls[cal_idx], configs[cal_idx]):
         config = dict(eval(config))
 

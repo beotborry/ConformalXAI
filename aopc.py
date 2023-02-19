@@ -15,6 +15,7 @@ from utils import set_seed
 from torch.nn import DataParallel
 
 
+
 def load_results(filename, alpha):
     with open(filename, "rb") as f:
         results = np.load(f, allow_pickle=True)
@@ -44,16 +45,16 @@ class ConfAOPCTestor():
         base_mask = expl > threshold.reshape(len(expl), 1, 1).unsqueeze(1)
 
         # our mask generating
-        # order = (mask * expl).flatten(1).argsort(descending=True)
-        order = (mask * conf_high).flatten(1).argsort(descending=True)
+        order = (mask * expl).flatten(1).argsort(descending=True)
+        # order = (mask * conf_high).flatten(1).argsort(descending=True)
         
         n_perturb = (r * ratio * order.shape[1]).type(torch.LongTensor).squeeze()
         n_order = order[range(len(expl)), n_perturb]
-        # threshold = (mask * expl).flatten(1)[range(len(expl)), n_order]
-        threshold = (mask * conf_high).flatten(1)[range(len(expl)), n_order]
+        threshold = (mask * expl).flatten(1)[range(len(expl)), n_order]
+        # threshold = (mask * conf_high).flatten(1)[range(len(expl)), n_order]
 
-        # our_mask = (mask * expl) > threshold.reshape(len(expl), 1, 1).unsqueeze(1)
-        our_mask = (mask * conf_high) > threshold.reshape(len(expl), 1, 1).unsqueeze(1)
+        our_mask = (mask * expl) > threshold.reshape(len(expl), 1, 1).unsqueeze(1)
+        # our_mask = (mask * conf_high) > threshold.reshape(len(expl), 1, 1).unsqueeze(1)
 
         # cal avg mask
         order = cal_avg.flatten(1).argsort(descending=True)
@@ -64,7 +65,7 @@ class ConfAOPCTestor():
 
         return (base_mask * img).detach(), (our_mask * img).detach(), (cal_avg_mask * img).detach()
 
-    def test_step(self, expl, img, label, conf_high, conf_low, cal_avg, mode='insertion', transform=None, configs=None):
+    def test_step(self, expl, img, off_center_imgs, label, conf_high, conf_low, cal_avg, mode='insertion', transform=None, configs=None):
         base_prob_list = []
         our_prob_list = []
         avg_prob_list = []
@@ -77,9 +78,16 @@ class ConfAOPCTestor():
                             transforms.RandomHorizontalFlip(config['flip_horizon']),
                             transforms.RandomRotation((config['rot_angle'], config['rot_angle']), InterpolationMode.BILINEAR),
                         ])
-                        img_base[idx] = t(img_base[idx])
-                        img_our[idx] = t(img_our[idx])
-                        img_avg[idx] = t(img_avg[idx])
+                        img_322 = off_center_imgs[idx]
+                        img_322[:, 49:273, 49:273] = img_base[idx]
+                        img_base[idx] = center_crop_224(t(img_322))
+
+                        img_322[:, 49:273, 49:273] = img_our[idx]
+                        img_our[idx] = center_crop_224(t(img_322))
+                        
+                        img_322[:, 49:273, 49:273] = img_avg[idx]
+                        img_avg[idx] = center_crop_224(t(img_322))
+
 
             logit = self.model(img_base.cuda())
             del img_base
@@ -184,6 +192,7 @@ if __name__ == "__main__":
     num_data = args.num_data
     expl_method = args.expl_method
     orig_input_method = args.orig_input_method
+    region = (49, 49, 273, 273)
 
     batch_size = 100
     model = resnet50(weights=ResNet50_Weights.DEFAULT).eval()
@@ -244,7 +253,8 @@ if __name__ == "__main__":
                 continue
 
             orig_img_pil = Image.open(img_path)
-            orig_img = center_crop_224(resize_322(orig_img_pil))
+            # orig_img = center_crop_224(resize_322(orig_img_pil))
+            orig_img = resize_322(orig_img_pil)
             orig_imgs.append(orig_img)
             
             with open(f"results/val_seed_{seed}_dataset_{dataset}_orig_input_method_{orig_input_method}_pred_orig_eval_orig_transform_both_sign_all_reduction_sum/{img_name}_expl_{expl_method}_sample_2000_sigma_0.05_seed_{seed}_orig_true_config.npy", "rb") as f:
@@ -289,6 +299,7 @@ if __name__ == "__main__":
                 _avg_probs = torch.zeros(11)
                 
                 imgs = []
+                off_center_imgs = []
                 spatial_configs = []
                 
                 y = model(imagenet_normalize(tensorize(orig_img)).unsqueeze(0).cuda()).argmax(dim = 1).unsqueeze(0)
@@ -301,9 +312,13 @@ if __name__ == "__main__":
                         T_color = get_trivial_augment(aopc = True, trans_opt='color')
                         T_spatial, _, spatial_config = get_spatial_transform()
                         _orig_img = T_color(orig_img)
-                        logit = model(T_spatial(_orig_img).unsqueeze(0).cuda())
+                        logit = model(center_crop_224(T_spatial(_orig_img)).unsqueeze(0).cuda())
                         if logit.argmax() == y:
-                            imgs.append(_orig_img)
+                            imgs.append(center_crop_224(_orig_img))
+                            off_center_img = _orig_img.clone()
+                            off_center_img[:, :, region[1]:region[3], region[0]:region[2]] = 0
+                            off_center_imgs.append(off_center_img)
+
                             spatial_configs.append(spatial_config)
                             perturbed_num += 1
                         else:
@@ -311,7 +326,7 @@ if __name__ == "__main__":
 
                     imgs = torch.stack(imgs)
 
-                    orig_prob_list, our_prob_list, avg_prob_list = tester.test_step(_orig_expl.repeat(args.perturb_num, 1, 1, 1), imgs, y, _conf_high.repeat(args.perturb_num, 1, 1, 1), _conf_low.repeat(args.perturb_num, 1, 1, 1), cal_avg=cal_average.repeat(args.perturb_num, 1, 1, 1), transform=['spatial'], configs=spatial_configs)
+                    orig_prob_list, our_prob_list, avg_prob_list = tester.test_step(_orig_expl.repeat(args.perturb_num, 1, 1, 1), imgs, off_center_imgs,  y, _conf_high.repeat(args.perturb_num, 1, 1, 1), _conf_low.repeat(args.perturb_num, 1, 1, 1), cal_avg=cal_average.repeat(args.perturb_num, 1, 1, 1), transform=['spatial'], configs=spatial_configs)
                     
                     orig_prob_list = torch.stack(orig_prob_list)
                     our_prob_list = torch.stack(our_prob_list)
