@@ -41,6 +41,13 @@ def resize_32(img:Image.Image):
     ])
     return resize(img)
 
+def resize_232(img: Image.Image):
+    resize = transforms.Compose([
+        transforms.Resize((232, 232), InterpolationMode.BICUBIC)
+    ])
+
+    return resize(img)
+
 def resize_322(img: Image.Image):
     resize = transforms.Compose([
         transforms.Resize((322, 322), InterpolationMode.BICUBIC)
@@ -279,7 +286,8 @@ class TrivialAugmentWide(torch.nn.Module):
         if self.trans_opt == 'all':
             return {
                 # op_name: (magnitudes, signed)
-                "Rotate": (torch.linspace(0.0, 135.0, num_bins), True),
+                "Rotate": (torch.tensor([0.0, 90.0]), True),
+                # "Rotate": (torch.linspace(0.0, 135.0, num_bins), True),
                 "Brightness": (torch.linspace(0.0, 0.99, num_bins), True),
                 "Color": (torch.linspace(0.0, 0.99, num_bins), True),
                 "Contrast": (torch.linspace(0.0, 0.99, num_bins), True),
@@ -304,7 +312,8 @@ class TrivialAugmentWide(torch.nn.Module):
         elif self.trans_opt == 'spatial':
             return {
                 # op_name: (magnitudes, signed)
-                "Rotate": (torch.linspace(0.0, 135.0, num_bins), True),
+                "Rotate": (torch.tensor([0.0, 90.0]), True),
+                # "Rotate": (torch.linspace(0.0, 135.0, num_bins), True),
             }
 
     def forward(self, img: Tensor) -> Tensor:

@@ -1,7 +1,7 @@
 import torch
 import numpy as np
 import matplotlib.pyplot as plt
-from transform_factory import resize_322, center_crop_224, tensorize, get_spatial_transform, get_color_transform, imagenet_normalize, resize_224, center_crop_32, resize_46
+from transform_factory import resize_322, center_crop_224, tensorize, get_spatial_transform, get_color_transform, imagenet_normalize, resize_224, center_crop_32, resize_46, resize_232
 from logger import Logger
 from tqdm import tqdm
 import time
@@ -22,7 +22,8 @@ class ConformalExpl:
 
         if self.data == "imagenet":
             if args.orig_input_method == "center_crop_224":
-                self.temp_img = center_crop_224(resize_322(orig_img))
+                # self.temp_img = center_crop_224(resize_322(orig_img))
+                self.temp_img = center_crop_224(resize_232(orig_img))
             else:
                 self.temp_img = resize_224(orig_img)
         elif self.data == "cifar10":
@@ -64,7 +65,7 @@ class ConformalExpl:
 
             if self.transform == "both":
                 if self.data == "imagenet":
-                    tmp = resize_224(self.orig_img)
+                    tmp = center_crop_224(resize_232(self.orig_img))
                     if transform_configs is None:
                         T = get_trivial_augment(logger=self.logger, noise_std=self.noise_sigma)
                         transformed_img = T(tmp)
