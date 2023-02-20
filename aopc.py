@@ -1,7 +1,7 @@
 from torchvision.models import resnet50, ResNet50_Weights
 import numpy as np
 import os
-from transform_factory import tensorize, center_crop_224, resize_322, imagenet_normalize, resize_224
+from transform_factory import tensorize, center_crop_224, resize_322, imagenet_normalize, resize_224, resize_232
 from PIL import Image
 import torch.nn.functional as F
 import torch
@@ -241,7 +241,8 @@ if __name__ == "__main__":
                 continue
 
             orig_img_pil = Image.open(img_path)
-            orig_img = center_crop_224(resize_322(orig_img_pil))
+            # orig_img = center_crop_224(resize_322(orig_img_pil))
+            orig_img = center_crop_224(resize_232(orig_img_pil))
             orig_imgs.append(orig_img)
             
             with open(f"results/val_seed_{seed}_dataset_{dataset}_orig_input_method_{orig_input_method}_pred_orig_eval_orig_transform_both_sign_all_reduction_sum/{img_name}_expl_{expl_method}_sample_2000_sigma_0.05_seed_{seed}_orig_true_config.npy", "rb") as f:

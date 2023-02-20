@@ -37,7 +37,8 @@ def calc_score_and_test_expls(true_expls, orig_expl, configs):
                 transforms.RandomHorizontalFlip(config['hflip']),
             ])
         
-        true_expl = center_crop_224(T_inv_spatial(F.interpolate(torch.tensor(true_expl).cuda().unsqueeze(0), (322, 322), mode='bicubic'))).squeeze(0)
+        # true_expl = center_crop_224(T_inv_spatial(F.interpolate(torch.tensor(true_expl).cuda().unsqueeze(0), (322, 322), mode='bicubic'))).squeeze(0)
+        true_expl = T_inv_spatial(F.interpolate(torch.tensor(true_expl).cuda().unsqueeze(0), (224, 224), mode='bicubic')).squeeze(0)
 
         cal_expls.append(true_expl)
         scores.append(torch.abs(true_expl - orig_expl))
@@ -60,7 +61,8 @@ def calc_score_and_test_expls(true_expls, orig_expl, configs):
             T_inv_spatial = transforms.Compose([
                 transforms.RandomHorizontalFlip(config['hflip'])
             ])
-        test_expls.append(center_crop_224(T_inv_spatial(F.interpolate(torch.tensor(true_expl).cuda().unsqueeze(0), (322, 322), mode='bicubic'))).squeeze(0))
+        # test_expls.append(center_crop_224(T_inv_spatial(F.interpolate(torch.tensor(true_expl).cuda().unsqueeze(0), (322, 322), mode='bicubic'))).squeeze(0))
+        test_expls.append(T_inv_spatial(F.interpolate(torch.tensor(true_expl).cuda().unsqueeze(0), (224, 224), mode='bicubic')).squeeze(0))
 
     test_expls = torch.stack(test_expls)
 
