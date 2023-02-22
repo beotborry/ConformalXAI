@@ -65,8 +65,8 @@ if __name__ == "__main__":
             img = Image.open(img_path)
 
             # print(np.array(img).shape)
-            if len(np.array(img).shape) != 3 or np.array(img).shape[2] != 3:
-                continue
+            if len(np.array(img).shape) == 2 or np.array(img).shape[2] != 3:
+                img = img.convert("RGB")
 
             total_data += 1
             # img = imagenet_normalize(tensorize(resize_224(img))).cuda()
@@ -76,13 +76,14 @@ if __name__ == "__main__":
 
 
             if pred.argmax() == label:
-                prob_list.append((img_path, softmax(pred).squeeze().max().item()))
+                # prob_list.append((img_path, softmax(pred).squeeze().max().item()))
+                prob_list.append((img_path, softmax(pred).squeeze().detach().cpu()))
             else:
                 continue
         print(len(prob_list))
 
 
-    with open(f"./val_prob_232_224.npy", "wb") as f:
+    with open(f"./val_prob_232_224_softmax.npy", "wb") as f:
         np.save(f, np.stack(prob_list))
 
     print(total_data)

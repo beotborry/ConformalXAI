@@ -116,7 +116,7 @@ def ToPIL(img):
 
 def get_spatial_transform():
     transform_space = {
-        "Rotate": (torch.linspace(0.0, 135.0, 31), True),
+        "Rotate": (torch.tensor([0.0, 90.0]), True),
     }
 
 
@@ -390,16 +390,17 @@ class TrivialAugmentWide(torch.nn.Module):
         return s
 
 class AddGaussianNoise(object):
-    def __init__(self, mean=0.0, std=1.0):
+    def __init__(self, mean=0.0, std=0.05):
         self.mean = mean
         self.std = std
 
     def __call__(self, img):
         # Convert the image to a tensor
-        img_tensor = transforms.ToTensor()(img)
+        # img_tensor = transforms.ToTensor()(img)
 
+        img_tensor = img
         # Generate the noise tensor
-        noise = torch.randn(img_tensor.size()) * self.std + self.mean
+        noise = torch.randn(img_tensor.size()) * (self.std) + self.mean
 
         # Add the noise to the image tensor
         img_tensor += noise
@@ -408,10 +409,38 @@ class AddGaussianNoise(object):
         img_tensor = torch.clamp(img_tensor, 0, 1)
 
         # Convert the image tensor back to an image
-        img = transforms.ToPILImage()(img_tensor)
+        # img = transforms.ToPILImage()(img_tensor)
 
         return img
 
+class RandomTransform():
+    def __init__(self, num_trans, logger) -> None:
+        self.space = ['hflip', 'rotation', 'color_jitter', 'grayscale']
+        self.num_trans = num_trans
+        self.logger = logger
+    def __call__(self, imgs):
+        configs = []
+        for i in range(len(imgs)):
+            config = []
+            trans_list = random.sample(self.space, self.num_trans)
+            for op_name in trans_list:
+                if op_name == 'hflip':
+                    imgs[i] = F.hflip(imgs[i])
+                    config.append((op_name, 1))
+                elif op_name == 'rotation':
+                    degree = np.random.choice([90., 180., 270.], 1)[0]
+                    imgs[i] = F.rotate(imgs[i], degree, InterpolationMode.BILINEAR)
+                    config.append((op_name, degree))
+                elif op_name == 'color_jitter':
+                    color_jitter = transforms.ColorJitter(0.8, 0.8, 0.8, 0.2)
+                    imgs[i] = color_jitter(imgs[i])
+                    config.append((op_name, 1))
+                elif op_name == 'grayscale':
+                    imgs[i] = F.rgb_to_grayscale(imgs[i], 3)
+                    config.append((op_name, 1))
+            configs.append(dict(config))
+        self.logger.save_transform_config(configs)
+        return imgs
 
 def get_trivial_augment(logger=None, aopc=False, trans_opt = 'all', noise_std = 0.05):
     mean = [0.485, 0.456, 0.406]
@@ -462,3 +491,30 @@ def get_trivial_augment(logger=None, aopc=False, trans_opt = 'all', noise_std = 
 
         return transforms.Compose(trans)
 
+
+class TransformFactory(object):
+    def __init__(self, logger, interpolation = InterpolationMode.BICUBIC, fill = None, num_trans = 2, noise_std = 0.05) -> None:
+        self.interpolation = interpolation
+        self.fill = fill
+        self.mean = [0.485, 0.456, 0.406]
+        self.std = [0.229, 0.224, 0.225]
+        self.num_trans = num_trans
+        self.noise_std = noise_std
+        self.logger = logger
+
+        self.random_sampler = RandomTransform(self.num_trans, self.logger)
+
+    def __call__(self, img:Image.Image) -> Tensor:
+        tmp = [
+            transforms.Resize((232,232), self.interpolation),
+            transforms.CenterCrop((224, 224)),
+            AddGaussianNoise(self.noise_std),
+            RandomTransform(self.num_trans, self.logger)
+        ]
+        tmp.extend([transforms.Normalize(mean=self.mean, std=self.std)])   
+        T = transforms.Compose(tmp)
+
+        return T(img)
+
+
+    

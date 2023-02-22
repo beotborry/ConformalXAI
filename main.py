@@ -36,11 +36,10 @@ if __name__ == '__main__':
         model.load_state_dict(check_point['state_dict'])
         model.cuda()
 
-
     if args.data == 'imagenet':
         if args.img_path is None:
             with open(f"{args.split}_{args.dataset}_seed_{args.seed}.npy", "rb") as f:
-                img_path_list = np.load(f)
+                img_path_list = np.load(f, allow_pickle=True)
 
         else:
             img_path_list = []
@@ -52,9 +51,9 @@ if __name__ == '__main__':
             expl_func = ExplFactory().get_explainer(model = model, expl_method = args.expl_method, upsample=args.upsample)
             conformalizer = ConformalExpl(orig_img, expl_func, args, img_path=img_path)
             
-            if args.with_config:
-                with open(f"{conformalizer.logger.save_path}/{conformalizer.logger.base_logname}_transform_config.txt", "r") as f:
-                    transform_configs = f.readlines()
+#             if args.with_config:
+#                 with open(f"{conformalizer.logger.save_path}/{conformalizer.logger.base_logname}_transform_config.txt", "r") as f:
+#                     transform_configs = f.readlines()
                         
             if os.path.exists(f"{conformalizer.logger.save_path}/{conformalizer.logger.base_logname}_orig_true_config.npy"):
                 continue
@@ -64,10 +63,7 @@ if __name__ == '__main__':
             elif args.run_option == 'eval':
                 conformalizer.evaluate()
             elif args.run_option == "pred" or args.run_option == "test":
-                if args.with_config:
-                    conformalizer.make_confidence_set(transform_configs)
-                else:
-                    conformalizer.make_confidence_set()
+                conformalizer.make_confidence_set()
     elif args.data == 'cifar10':
         val_loader = torch.utils.data.DataLoader(
             datasets.CiIFAR10(root='./data', train=False), batch_size=1, shuffle=False, pin_memory=True

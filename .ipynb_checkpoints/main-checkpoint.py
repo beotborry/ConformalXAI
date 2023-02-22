@@ -1,110 +1,89 @@
-#%%
 import torch
-import torchvision
 import numpy as np
-import matplotlib.pyplot as plt
-import os
 from PIL import Image
-from torchvision import transforms
-from transform_factory import center_crop, imagenet_normalize, get_tta_transform
-from captum.attr import LayerGradCam, LayerAttribution
-from captum.attr import visualization as viz
 from arguments import get_args
+from conformalize import ConformalExpl
+from expl import ExplFactory
+from torchvision.models import resnet50, ResNet50_Weights, resnet34, ResNet34_Weights, resnet18, ResNet18_Weights
+from utils import set_seed
 from tqdm import tqdm
-from conformalize import conformality_score, get_conf_interval, calc_coverage_prob
-from sklearn.utils.fixes import sp_version, parse_version 
-from sklearn.linear_model import QuantileRegressor
-from interpretation import get_grad_cam
-
+from torch.nn.parallel import DistributedDataParallel as DDP
+import torch.nn as nn
+import os
+import time
+import torchvision.datasets as datasets
+from resnet import resnet20
 
 if __name__ == '__main__':
     args = get_args()
+    print(vars(args))
+    set_seed(args.seed)
+
     device = torch.device(f'cuda:{args.device}' if torch.cuda.is_available() else 'cpu')
     torch.cuda.set_device(device)
 
-    model = torchvision.models.resnet50(pretrained=True).eval().cuda()
-
-    # TODO: make data loader
-    orig_img_path = "/home/juhyeon/Imagenet/train/n02100236/n02100236_18.JPEG"
-    # orig_img_path = "/home/juhyeon/Imagenet/train/n01443537/n01443537_605.JPEG"
-    # orig_img = Image.open("/home/juhyeon/Imagenet/train/n01443537/n01443537_605.JPEG")
-    orig_img = Image.open(orig_img_path)
-    attr_results = []
-
-    for _ in tqdm(range(args.n_sample)):
-        tta, inv_tta = get_tta_transform()
-
-        img = tta(imagenet_normalize(center_crop(orig_img)))
-        noise = args.sigma * torch.randn_like(img)
-        img -= noise
-
-        img = img.unsqueeze(0).cuda()
-
-        upsampled_attr = get_grad_cam(model, img)
-        
-        upsampled_attr = inv_tta(upsampled_attr)
-
-        upsampled_attr = upsampled_attr.detach().squeeze(0).cpu().numpy()
-        
-
-        img = inv_tta(img)
+    if args.model == 'resnet50':
+        device = torch.device(f'cuda:{args.device}' if torch.cuda.is_available() else 'cpu')
+        torch.cuda.set_device(device)
+        model = resnet50(weights = ResNet50_Weights.DEFAULT).eval().cuda()
     
-        attr_results.append(upsampled_attr)
+    elif args.model == 'resnet20':
+        device_ids = [args.device, args.device + 1]
+        model = resnet20()
+        check_point = torch.load('./pretrained_models/resnet20-12fca82f.th', map_location='cuda:%d' % device_ids[0])
 
-    attr_results = np.stack(attr_results)
+        model = torch.nn.DataParallel(model, device_ids=device_ids)
+        model.load_state_dict(check_point['state_dict'])
+        model.cuda()
 
+    if args.data == 'imagenet':
+        if args.img_path is None:
+            with open(f"{args.split}_{args.dataset}_seed_{args.seed}.npy", "rb") as f:
+                img_path_list = np.load(f)
 
-    img = imagenet_normalize(center_crop(orig_img)).unsqueeze(0).cuda()
-    true_proxy = get_grad_cam(model, img)
-    true_proxy = true_proxy.detach().squeeze(0).cpu().numpy()
-
-    q_hat = conformality_score(attr_results, true_proxy, args.alpha)
-    # expl_hat, q_hat = conformality_score(attr_results, args.alpha)
-
-
-
-    attr_results = []
-    for _ in tqdm(range(args.n_sample)):
-        tta, inv_tta = get_tta_transform()
-
-        img = tta(imagenet_normalize(center_crop(orig_img)))
-        noise = args.sigma * torch.randn_like(img)
-        img -= noise
-        img = img.unsqueeze(0).cuda()
-
-        gc = LayerGradCam(model, model.layer4[2].conv3)
-        attr = gc.attribute(img, target = model(img).argmax())
-
-        upsampled_attr = LayerAttribution.interpolate(attr, img.shape[2:], 'bilinear')
-        
-        upsampled_attr = inv_tta(upsampled_attr)
-
-        upsampled_attr = upsampled_attr.detach().squeeze(0).cpu().numpy()
-        
-
-        img = inv_tta(img)
-    
-        attr_results.append(upsampled_attr)
-
-    attr_results = np.stack(attr_results)
+        else:
+            img_path_list = []
+            img_path_list.append(args.img_path)
 
 
-    conf_low, conf_high = get_conf_interval(attr_results, q_hat)
+        for img_path in tqdm(img_path_list):
+            orig_img = Image.open(img_path)
+            expl_func = ExplFactory().get_explainer(model = model, expl_method = args.expl_method, upsample=args.upsample)
+            conformalizer = ConformalExpl(orig_img, expl_func, args, img_path=img_path)
+            
+#             if args.with_config:
+#                 with open(f"{conformalizer.logger.save_path}/{conformalizer.logger.base_logname}_transform_config.txt", "r") as f:
+#                     transform_configs = f.readlines()
+                        
+            if os.path.exists(f"{conformalizer.logger.save_path}/{conformalizer.logger.base_logname}_orig_true_config.npy"):
+                continue
+            if args.run_option == 'all':
+                conformalizer.make_confidence_set()
+                conformalizer.evaluate()
+            elif args.run_option == 'eval':
+                conformalizer.evaluate()
+            elif args.run_option == "pred" or args.run_option == "test":
+                conformalizer.make_confidence_set()
+    elif args.data == 'cifar10':
+        val_loader = torch.utils.data.DataLoader(
+            datasets.CiIFAR10(root='./data', train=False), batch_size=1, shuffle=False, pin_memory=True
+        )
 
-    coverage_map= calc_coverage_prob(true_proxy, conf_low, conf_high)
+        dataset = val_loader.dataset
+        correct_indicies = torch.load("./cifar10_val_correct_indicies.pt")
 
-    plt.imshow(coverage_map.squeeze(), cmap='hot', interpolation='nearest')
-    plt.text(180, 200, f"mean: {coverage_map.squeeze().mean():.3f}")
-    plt.text(180, 180, f"max: {coverage_map.squeeze().max():.3f}")
-    plt.text(180, 220, f"min: {coverage_map.squeeze().min():.3f}")
-    plt.colorbar()
-    plt.savefig(f"./{os.path.basename(orig_img_path)}_alpha_{args.alpha}_n_sample_{args.n_sample}.jpg")
+        for idx in correct_indicies:
+            img_path = f"./data/cifar-10-batches-py/test_{idx}"
+            orig_img = dataset[idx][0]
+            expl_func = ExplFactory().get_explainer(model = model, expl_method=args.expl_method, upsample=args.upsample)
+            conformalizer = ConformalExpl(orig_img, expl_func, args, img_path=img_path)
 
-
-        # _ = viz.visualize_image_attr(np.transpose(upsampled_attr, (1,2,0)),
-        #                      np.transpose(img.squeeze().cpu().detach().numpy(), (1,2,0)),
-        #                      "blended_heat_map",
-        #                      sign="all",
-        #                      show_colorbar=True)
-
-
+            if os.path.exists(f"{conformalizer.logger.save_path}/{conformalizer.logger.base_logname}_orig_true_config.npy"):
+                continue
+            if args.run_option == 'all':
+                conformalizer.make_confidence_set()
+                conformalizer.evaluate()
+            elif args.run_option == 'eval':
+                conformalizer.evaluate()
+            elif args.run_option == "pred" or args.run_option == "test":
+                conformalizer.make_confidence_set()

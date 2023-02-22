@@ -12,7 +12,7 @@ def get_args():
     parser.add_argument("--transform", choices=['spatial', 'color', 'both'])
     parser.add_argument("--sign", choices=['all', 'absolute'])
     parser.add_argument("--reduction", choices=['none', 'sum', 'mean'], default='none')
-    parser.add_argument("--batch_size", type=int)
+
     parser.add_argument("--split", choices = ['train', 'val'])
     parser.add_argument("--upsample", action="store_true")
     parser.add_argument("--dataset", choices=["center_crop_224", "resize_224"])

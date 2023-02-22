@@ -2,12 +2,12 @@ import functools
 from captum.attr import LayerGradCam, LayerAttribution, IntegratedGradients, InputXGradient, GuidedBackprop, LRP, Occlusion, Saliency, DeepLift, LayerIntegratedGradients, LayerGradientXActivation, LayerConductance, LayerDeepLift, LayerActivation
 from captum.attr import LayerLRP, NoiseTunnel
 from captum.attr import visualization as viz
+from torch.nn import Softmax
 
 
 class ExplFactory:
     def __init__(self):
         pass
-
     @staticmethod
     def get_explainer(model, expl_method, layer = None, upsample=False):
         if layer is None:
@@ -45,23 +45,18 @@ class ExplFactory:
             print("Check Expl Method Name!")
 
 def get_grad_cam(model, layer, upsample, img, orig_target=None):
-    target = model(img).argmax()
-
-    if orig_target != "init" and target != orig_target:
-        return None, target
+    probs = Softmax(dim=1)(model(img))
+    target = probs.argmax(dim = 1)
 
     gc = LayerGradCam(model, layer)
     attr = gc.attribute(img, target = target)
     if upsample:
         return LayerAttribution.interpolate(attr, img.shape[2:], 'bilinear'), target
-    else: return attr, target
+    else: return attr, probs, target
 
 def get_ig(model, img, orig_target=None):
-    target = model(img).argmax()
-
-
-    if orig_target != "init" and target != orig_target:
-        return None, target
+    probs = Softmax(dim=1)(model(img))
+    target = probs.argmax(dim = 1)
 
     ig = IntegratedGradients(model)
     return ig.attribute(img, target = target), target
@@ -113,48 +108,42 @@ def get_saliency(model, img, orig_target=None):
     return saliency.attribute(img, target=target), target
 
 def get_layer_lrp(model, layer, img, orig_target=None):
-    target = model(img).argmax()
-    
-    if orig_target != "init" and target != orig_target:
-        return None, target
+    probs = Softmax(dim=1)(model(img))
+    target = probs.argmax(dim = 1)
+
 
     lrp = LayerLRP(model, layer)
     attr = lrp.attribute(img, target = target)
-    return attr, target
+    return attr, probs, target
 
 def get_deeplift(model, img, orig_target=None):
-    target = model(img).argmax()
-    
-    if orig_target != "init" and target != orig_target:
-        return None, target
+    probs = Softmax(dim=1)(model(img))
+    target = probs.argmax(dim = 1)
 
     dl = DeepLift(model)
-    return dl.attribute(img, target=target), target
+    return dl.attribute(img, target=target), probs, target
 
 def get_layerIG(model, layer, upsample, img, orig_target=None):
-    target = model(img).argmax()
+    probs = Softmax(dim=1)(model(img))
+    target = probs.argmax(dim = 1)
 
-    if orig_target != "init" and target != orig_target:
-        return None, target
-    
     lig = LayerIntegratedGradients(model, layer)
     attr = lig.attribute(img, target = target)
     if upsample:
         return LayerAttribution.interpolate(attr, img.shape[2:], 'bilinear'), target
     else:
-        return attr, target
+        return attr, probs, target
 
 def get_layerXAct(model, layer, upsample, img, orig_target=None):
-    target = model(img).argmax()
+    probs = Softmax(dim=1)(model(img))
+    target = probs.argmax(dim = 1)
 
-    if orig_target != "init" and target != orig_target:
-        return None, target
     layer_ga = LayerGradientXActivation(model, layer)
     attr = layer_ga.attribute(img, target=target)
     if upsample:
         return LayerAttribution.interpolate(attr, img.shape[2:], 'bilinear'), target
     else:
-        return attr, target
+        return attr, probs, target
 
 
 def get_layerConductance(model, layer, img, orig_target=None):
@@ -167,15 +156,15 @@ def get_layerConductance(model, layer, img, orig_target=None):
     return layer_cond.attribute(img, target=target), target
 
 def get_layerDL(model, layer, upsample, img, orig_target=None):
-    target = model(img).argmax()
-    if orig_target != "init" and target != orig_target:
-        return None, target
+    probs = Softmax(dim=1)(model(img))
+    target = probs.argmax(dim = 1)
+
     dl = LayerDeepLift(model, layer)
     attr = dl.attribute(img, target=target)
     if upsample:
         return LayerAttribution.interpolate(attr, img.shape[2:], 'bilinear'), target
     else:
-        return attr, target
+        return attr, probs, target
 
 def get_layerIG_SG(model, layer, upsample, img, orig_target=None):
     target = model(img).argmax()

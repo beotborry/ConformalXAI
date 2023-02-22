@@ -77,7 +77,7 @@ class ConfAOPCTestor():
                         img_base[idx] = t(img_base[idx])
                         img_our[idx] = t(img_our[idx])
                         img_avg[idx] = t(img_avg[idx])
-
+                        
             logit = self.model(img_base.cuda())
             del img_base
             prob_base = self.softmax(logit)
@@ -115,7 +115,7 @@ class AOPCTestor():
         if mode == "insertion":
             order = expl.flatten(1).argsort(descending=True)
             n_perturb = int(ratio * order.shape[1])
-            n_order = order[:, n_perturb] 
+            n_order = order[range(len(expl)), n_perturb] 
             threshold = expl.flatten(1)[range(len(expl)), n_order]
             mask = expl > threshold.reshape(len(expl), 1, 1).unsqueeze(1)
         elif mode == "deletion":
@@ -130,25 +130,23 @@ class AOPCTestor():
     def test_step(self, expl, img, label, mode="insertion", transform=None, configs=None):
         prob_list = []
 
-        print(configs)
-        for ratio in np.arange(0, 1, 0.05):
-
+        for ratio in np.arange(0, 1, 0.1):
             img_p = self.perturbation(expl, img, ratio=ratio, mode=mode)
             if transform is not None:
                 for i, _img in enumerate(img_p):
                     if "spatial" in transform:
                         t = transforms.Compose([
-                            transforms.RandomHorizontalFlip(configs['flip_horizon']),
-                            transforms.RandomRotation((configs['rot_angle'], configs['rot_angle']), InterpolationMode.BILINEAR),
+                            transforms.RandomHorizontalFlip(configs[i]['flip_horizon']),
+                            transforms.RandomRotation((configs[i]['rot_angle'], configs[i]['rot_angle']), InterpolationMode.BILINEAR),
                         ])
                         img_p[i] = t(_img)
 
             logit = self.model(img_p.cuda())
             del img_p
             prob = self.softmax(logit)
-
-            aopc_prob = prob[range(len(label)), label].detach().mean()
+            aopc_prob = prob[:, label].detach().sum()
             prob_list.append(aopc_prob.detach().cpu())
+            print(prob_list[-1])
 
         return prob_list
 
@@ -241,7 +239,6 @@ if __name__ == "__main__":
                 continue
 
             orig_img_pil = Image.open(img_path)
-            # orig_img = center_crop_224(resize_322(orig_img_pil))
             orig_img = center_crop_224(resize_232(orig_img_pil))
             orig_imgs.append(orig_img)
             
@@ -258,16 +255,62 @@ if __name__ == "__main__":
  
 
         if args.tester == 'OrigAOPC':
-            print(orig_expls.shape, conf_highs.shape, conf_lows.shape, orig_imgs.shape)
-            orig_prob_list = torch.stack(tester.test_step(orig_expls, orig_imgs, y, args.mode, args.transform, T_spatial_configs))
+            for img_name, orig_expl, orig_img, conf_high, conf_low, cal_average in zip(img_names, orig_expls, orig_imgs, conf_highs, conf_lows, cal_averages):
+                log_name = log_name_base + f"_{img_name}.pt"
+                if os.path.exists(log_name):
+                    print("skipped!")
+                    continue
+
+                _orig_expl = orig_expl.unsqueeze(0)
+                _conf_high = conf_high.unsqueeze(0)
+                _conf_low = conf_low.unsqueeze(0)
+
+                _orig_probs = torch.zeros(10)
+                _our_probs = torch.zeros(10)
+                _avg_probs = torch.zeros(10)
+                
+                imgs = []
+                spatial_configs = []
+                
+                y = model(imagenet_normalize(tensorize(orig_img)).unsqueeze(0).cuda()).argmax(dim = 1).unsqueeze(0)
+
+                total_num = args.perturb_num * args.perturb_iter
+
+                for _ in range(args.perturb_iter):
+                    perturbed_num = 0
+                    while perturbed_num < args.perturb_num:
+                        T_color = get_trivial_augment(aopc = True, trans_opt='color')
+                        T_spatial, _, spatial_config = get_spatial_transform()
+                        _orig_img = T_color(orig_img)
+                        logit = model(T_spatial(_orig_img).unsqueeze(0).cuda())
+                        if logit.argmax() == y:
+                            imgs.append(_orig_img)
+                            spatial_configs.append(spatial_config)
+                            perturbed_num += 1
+                        else:
+                            continue
+
+                    imgs = torch.stack(imgs)
 
 
-            high_ins_list = torch.stack(tester.test_step(conf_highs, orig_imgs, y, args.mode, args.transform, T_spatial_configs))
-            low_ins_list = torch.stack(tester.test_step(conf_lows, orig_imgs, y, args.mode, args.transform, T_spatial_configs))
+                    orig_prob_list = torch.stack(tester.test_step(_orig_expl.repeat(args.perturb_num, 1, 1, 1), imgs, y, args.mode, ['spatial'], spatial_configs))
+                    print(orig_prob_list)
+                    # our_prob_list = torch.stack(tester.test_step(_conf_low.repeat(args.perturb_num, 1, 1, 1), imgs, y, args.mode,  ['spatial'], spatial_configs))
+                    our_prob_list = torch.stack(tester.test_step(_conf_high.repeat(args.perturb_num, 1, 1, 1), imgs, y, args.mode,  ['spatial'], spatial_configs))
 
+                    avg_prob_list = torch.stack(tester.test_step(cal_average.repeat(args.perturb_num, 1, 1, 1), imgs, y, args.mode, ['spatial'], spatial_configs))
 
-            log_name = log_name_base + f"_batch_num_{i}.pt"
-            torch.save(torch.vstack((orig_prob_list, high_ins_list, low_ins_list)), log_name)
+                    _orig_probs += orig_prob_list
+                    _our_probs += our_prob_list
+                    _avg_probs += avg_prob_list
+
+                    imgs = []
+                    spatial_configs = []
+                    perturbed_num = 0
+
+                print(_orig_probs / total_num, _our_probs / total_num, _avg_probs / total_num)
+                torch.save(torch.vstack((_orig_probs / total_num, _our_probs / total_num, _avg_probs / total_num)), log_name)
+
 
         elif args.tester == "ConfAOPC":
             for img_name, orig_expl, orig_img, conf_high, conf_low, cal_average in zip(img_names, orig_expls, orig_imgs, conf_highs, conf_lows, cal_averages):

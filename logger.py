@@ -80,6 +80,10 @@ class Logger:
         with open(f"{self.save_path}/{self.base_logname}_transform_config.txt", "a") as f:
             # f.write(f"{op_name}_{magnitude}\n")
             f.write(f"{str(config)}\n")
+
+    def save_intersect_index(self, indicies):
+        with open(f"{self.save_path}/{self.base_logname}_intersect_index.txt", "a") as f:
+            f.write(f"{indicies}\n")
     
     def remove_last_line(self):
         with open(f"{self.save_path}/{self.base_logname}_transform_config.txt", "r") as f:

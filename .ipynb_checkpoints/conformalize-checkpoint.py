@@ -21,9 +21,7 @@ class ConformalExpl:
         self.pred_method = args.pred_method
         self.eval_method = args.eval_method
         self.data = args.data
-        self.T = TransformFactory(self.logger)
-        self.batch_size = args.batch_size
-        self.base_entropy = 4.2894835
+        self.T = TransformFactory()
 
         if self.data == "imagenet":
             if args.orig_input_method == "center_crop_224":
@@ -66,30 +64,47 @@ class ConformalExpl:
         pbar = tqdm(total = self.n_sample)
     
         while t < self.n_sample:
-            img_batch = to_tensor(self.orig_img).repeat(self.batch_size, 1, 1, 1)
+            img_batch = pil_to_tensor(self.orig_img).repeat(128, 1, 1, 1)
             transformed_img = self.T(img_batch).cuda()
-            _true_expl, _probs, _target = self.expl_func(transformed_img, self.orig_pred)
-            correct_indices = np.array(torch.where(_target == self.orig_pred)[0].detach().cpu())
-            entropies = np.array(list(map(entropy, _probs.detach().cpu())))
-            entropy_indices = np.where(entropies < self.base_entropy)[0]
 
-            intersect_indices = np.intersect1d(correct_indices, entropy_indices)
-            if len(intersect_indices) == 0:
+
+            _true_expl, _probs, _target = self.expl_func(transformed_img, self.orig_pred)
+            
+            print(_probs.shape, _target.shape)
+            print(self.orig_pred)
+            print(_probs.argmax(dim=1))
+            print(list(map(entropy, _probs.detach().cpu())))
+            return
+            n_try += 1
+            if n_try > 200:
+                self.logger.log_long_time_file(self.img_path)
+                print('skipped long time file!')
+                return
+            if _target != self.orig_pred:
+                self.logger.remove_last_line()
                 continue
             else:
-                t += len(intersect_indices)
-                pbar.update(len(intersect_indices))
-                self.logger.save_intersect_index(intersect_indices)
-
-            true_expl = _true_expl[intersect_indices]
+                t += 1
+                pbar.update(1) 
+                if n_try > 100:
+                    self.logger.log_long_time_file(self.img_path)
+                    print('skipped long time file!')
+                    return
+                n_try = 0
+            
+            if self.upsample:
+                true_expl = center_crop_224(T_inv_spatial(_true_expl))
+            else:
+                true_expl = _true_expl # FIXME
 
             if self.reduction == 'sum':
                 true_expl = torch.sum(true_expl, axis = 1).unsqueeze(1)
 
-            true_expls.append(true_expl.detach().cpu().numpy())
+
+            true_expls.append(true_expl.detach().squeeze(0).cpu().numpy())
 
 
-        true_expls = np.concatenate(true_expls)[:2000]
+        true_expls = np.stack(true_expls)
         print("True expl shape: ", true_expls.shape)
 
         self.logger.save_orig_true_config(self.orig_expl.detach().squeeze(0).cpu().numpy(), true_expls, T_spatial_configs)
