@@ -11,7 +11,7 @@ class ExplFactory:
     @staticmethod
     def get_explainer(model, expl_method, layer = None, upsample=False):
         if layer is None:
-            layer = model.layer4 # last conv layer
+            layer = model.module.layer4 # last conv layer
 
         assert expl_method is not None
         

@@ -8,24 +8,31 @@ from torchvision.models import resnet50, ResNet50_Weights, resnet34, ResNet34_We
 from utils import set_seed
 from tqdm import tqdm
 from torch.nn.parallel import DistributedDataParallel as DDP
+from torch.nn.parallel import DataParallel
 import torch.nn as nn
 import os
 import time
 import torchvision.datasets as datasets
 from resnet import resnet20
+import torch.distributed as dist
 
 if __name__ == '__main__':
     args = get_args()
     print(vars(args))
     set_seed(args.seed)
+    # os.environ['MASTER_ADDR'] = 'localhost'
+    # os.environ['MASTER_PORT'] = '12355'
+    # dist.init_process_group("gloo", rank=0, world_size=2)
 
-    device = torch.device(f'cuda:{args.device}' if torch.cuda.is_available() else 'cpu')
-    torch.cuda.set_device(device)
+    # device = torch.device(f'cuda:{args.device}' if torch.cuda.is_available() else 'cpu')
+    # torch.cuda.set_device(device)
 
     if args.model == 'resnet50':
-        device = torch.device(f'cuda:{args.device}' if torch.cuda.is_available() else 'cpu')
-        torch.cuda.set_device(device)
+        # device = torch.device(f'cuda:{args.device}' if torch.cuda.is_available() else 'cpu')
+        # torch.cuda.set_device(device)
+        # device = torch.device(f"cuda:{args.device[0]},{args.device[1]}" if torch.cuda.is_available() else 'cpu')
         model = resnet50(weights = ResNet50_Weights.DEFAULT).eval().cuda()
+        model = DataParallel(model)
     
     elif args.model == 'resnet20':
         device_ids = [args.device, args.device + 1]
@@ -48,6 +55,7 @@ if __name__ == '__main__':
 
         for img_path in tqdm(img_path_list):
             orig_img = Image.open(img_path)
+            orig_img = orig_img.convert("RGB")
             expl_func = ExplFactory().get_explainer(model = model, expl_method = args.expl_method, upsample=args.upsample)
             conformalizer = ConformalExpl(orig_img, expl_func, args, img_path=img_path)
             
