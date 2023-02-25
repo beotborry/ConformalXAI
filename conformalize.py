@@ -79,6 +79,7 @@ class ConformalExpl:
                 if n_try == 5:
                     self.logger.log_long_time_file(self.img_path)
                     print("skipped!")
+                    return
             else:
                 t += len(intersect_indices)
                 pbar.update(len(intersect_indices))
