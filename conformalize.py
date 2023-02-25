@@ -75,7 +75,10 @@ class ConformalExpl:
 
             intersect_indices = np.intersect1d(correct_indices, entropy_indices)
             if len(intersect_indices) == 0:
-                continue
+                n_try += 1
+                if n_try == 5:
+                    self.logger.log_long_time_file(self.img_path)
+                    print("skipped!")
             else:
                 t += len(intersect_indices)
                 pbar.update(len(intersect_indices))
